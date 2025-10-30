@@ -1,0 +1,10 @@
+{
+  "title": "Moon Lander",
+  "author": "RetroForge",
+  "description": "Demo cart for a lunar landing game.",
+  "genre": "Demo",
+  "tags": ["example", "lander"],
+  "entry": "main.lua"
+}
+
+

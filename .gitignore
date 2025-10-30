@@ -1,0 +1,44 @@
+# Binaries and build outputs
+/bin/
+/build/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go work/cache
+*.cover
+coverage*
+cover.out
+profile.out
+.go-work
+
+# Local env/config
+.env
+.env.*
+*.local
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# WASM artifacts
+/public/
+wasm/
+*.wasm
+wasm_exec.js
+
+# Packs and bundles (generated)
+*.rfbundle
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
