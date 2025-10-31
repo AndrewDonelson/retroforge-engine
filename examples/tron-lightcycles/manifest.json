@@ -1,0 +1,11 @@
+{
+  "title": "Tron Light Cycles",
+  "author": "RetroForge",
+  "description": "Classic Tron-style light cycles game with increasing difficulty.",
+  "genre": "Action",
+  "tags": ["example", "tron", "cycles", "racing"],
+  "entry": "main.lua",
+  "palette": "Super Mario 50",
+  "scale": 1
+}
+

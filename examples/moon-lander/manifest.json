@@ -4,7 +4,9 @@
   "description": "Demo cart for a lunar landing game.",
   "genre": "Demo",
   "tags": ["example", "lander"],
-  "entry": "main.lua"
+  "entry": "main.lua",
+  "palette": "Grayscale 50",
+  "scale": 1
 }
 
 

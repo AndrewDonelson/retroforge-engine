@@ -4,7 +4,9 @@
   "description": "Simple centered hello world",
   "genre": "Demo",
   "tags": ["example"],
-  "entry": "main.lua"
+  "entry": "main.lua",
+  "palette": "RetroForge 50",
+  "scale": 1
 }
 
 
