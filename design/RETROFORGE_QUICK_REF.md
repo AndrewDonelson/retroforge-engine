@@ -86,6 +86,9 @@ game.rfe (ZIP archive)
 5. **Memory** - Persistent storage
 6. **Math** - Helpers, random
 7. **Utility** - Time, strings, tables
+8. **State Machine** - Game state management (menus, pause, etc.)
+9. **Multiplayer** - WebRTC networking (up to 6 players)
+10. **Physics** - Box2D integration
 
 ---
 

@@ -175,6 +175,26 @@ Node (abstract base)
 - **Save Data:** 1024 bytes per cart
 - **Format:** Key-value storage (64 slots × 16 bytes each)
 
+### State Machine System
+
+RetroForge includes a flexible state machine system for managing game flow:
+- **State Lifecycle:** Initialize, Enter, HandleInput, Update, Draw, Exit, Shutdown callbacks
+- **State Stacking:** Push/pop states for overlays (pause menus, inventory screens)
+- **Shared Context:** Pass data between states without tight coupling
+- **Built-in States:** Engine splash (debug-skippable) and credits screens
+- **Lua API:** `game.registerState()`, `game.changeState()`, `game.pushState()`, etc.
+- See `game-state-machine-design.md` for complete specification
+
+### Multiplayer System
+
+RetroForge supports multiplayer games via WebRTC:
+- **Up to 6 players** in real-time
+- **Host Authority:** One player controls game logic
+- **Automatic Synchronization:** Register tables for 3-tier sync (fast/moderate/slow)
+- **Star Topology:** All players connect directly to host
+- **Lua API:** `rf.is_multiplayer()`, `rf.network_sync()`, etc.
+- See `RetroForge.V2.md` for complete multiplayer architecture
+
 ---
 
 ## Architecture
@@ -1263,6 +1283,55 @@ cartdata(id)                           -- Set cart data ID (call in _init)
 dget(index)                            -- Get persistent value (0-63)
 dset(index, value)                     -- Set persistent value
 ```
+
+### State Machine API
+
+The state machine provides flexible game flow management through different states (menus, playing, pause screens, etc.). Use `game.*` functions to register and manage states.
+
+**State Registration:**
+```lua
+game.registerState(name, stateTable)    -- Register a new state
+game.unregisterState(name)             -- Remove a state
+```
+
+**State Transitions:**
+```lua
+game.changeState(name)                 -- Replace all states with new state
+game.pushState(name)                   -- Add state on top of stack (for overlays)
+game.popState()                        -- Remove top state from stack
+game.popAllStates()                    -- Remove all states from stack
+```
+
+**Shared Context:**
+```lua
+game.setContext(key, value)            -- Store data in shared context
+game.getContext(key)                  -- Retrieve data from context
+game.hasContext(key)                  -- Check if key exists
+game.clearContext(key)                 -- Remove a specific key
+game.clearAllContext()                -- Clear all context
+```
+
+**Credits API:**
+```lua
+game.addCredit(category, name, role)  -- Add credit entry
+game.exit()                            -- Transition to credits and exit
+```
+
+**State Lifecycle:**
+Each state can define optional callbacks:
+- `initialize(sm)` - Called once when state is first created
+- `enter(sm)` - Called every time state becomes active
+- `handleInput(sm)` - Called each frame for input processing
+- `update(dt)` - Called each frame for game logic
+- `draw()` - Called each frame for rendering
+- `exit(sm)` - Called when leaving the state
+- `shutdown()` - Called once when state is destroyed
+
+**Built-in States:**
+- `__engine_splash` - Engine branding screen (shown on startup, skipped in debug mode)
+- `__credits` - Credits screen (shown before exit)
+
+See `game-state-machine-design.md` for complete documentation.
 
 ### Utility API
 

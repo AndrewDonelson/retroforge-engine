@@ -139,6 +139,8 @@
 - **Map:** 8 layers with parallax
 - **Audio:** 8 channels, chip-tune synthesis
 - **Physics:** Box2D rigid body simulation
+- **State Machine:** Flexible state management with lifecycle callbacks
+- **Multiplayer:** WebRTC networking (up to 6 players)
 - **Platforms:** Windows, macOS, Linux, Android, Web (no iOS)
 
 ### Node Types (15+)
@@ -148,6 +150,10 @@
 - Camera, CollisionShape
 - AudioPlayer, MusicPlayer
 - Timer, ParticleEmitter
+
+### Additional Systems
+- **State Machine:** `game.registerState()`, `game.changeState()`, `game.pushState()`, etc.
+- **Multiplayer:** `rf.is_multiplayer()`, `rf.network_sync()`, WebRTC integration
 
 ### Audio System
 - **SoundManager:** Automatic global (Sound)

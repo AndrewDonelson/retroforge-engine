@@ -33,6 +33,8 @@
 - **Audio:** 8 channels, chip-tune synthesis (5 waveforms)
 - **Physics:** Box2D rigid body simulation
 - **Node System:** Godot-style scene graph (15+ node types)
+- **State Machine:** Flexible state management with lifecycle callbacks and state stacking
+- **Multiplayer:** WebRTC networking support for up to 6 players
 - **API:** Dual (high-level nodes + low-level direct)
 
 ---
