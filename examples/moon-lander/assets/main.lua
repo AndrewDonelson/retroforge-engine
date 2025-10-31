@@ -114,13 +114,12 @@ local function normalize_angle()
   if ship.angle < -math.pi then ship.angle = ship.angle + TWO_PI end
 end
 
-local start_melody = {"4C1","4E1","4G2","R1","4E1","4C2"}
 local function update_menu(dt)
   if rf.btnp(2) then menu_idx = math.max(1, menu_idx-1); rf.sfx("move") end
   if rf.btnp(3) then menu_idx = math.min(2, menu_idx+1); rf.sfx("move") end
   if rf.btnp(4) or rf.btnp(5) then
     if menu_idx == 1 then
-      rf.sfx("select"); score, level = 0, 1; set_level(level); state = "playing"; rf.music(start_melody, 120, 0.28)
+      rf.sfx("select"); score, level = 0, 1; set_level(level); state = "playing"; rf.music("start_melody")
     else
       rf.sfx("select"); rf.quit()
     end
@@ -129,7 +128,6 @@ end
 
 local crash_phase = nil
 local crash_timer = 0
-local taps_tokens = {"3A2","3F2","3D2","3F3"}
 local taps_started = false
 local taps_total_dur = 0
 
@@ -143,9 +141,10 @@ local function update_crash(dt)
     if crash_timer >= 0.25 then crash_phase = "taps"; crash_timer = 0 end
   elseif crash_phase == "taps" then
     if not taps_started then
-      rf.music(taps_tokens, 72, 0.24)
-      local sum = 0; for i=1,#taps_tokens do local tk=taps_tokens[i]; local last=string.sub(tk,-1); sum = sum + (tonumber(last) or 1) end
-      taps_total_dur = (60/72)*sum + 0.3; taps_started = true
+      rf.music("taps")
+      -- Estimate duration: tokens array has durations in format like "3A2" where last char is duration
+      -- For simplicity, estimate ~4 seconds for the taps track
+      taps_total_dur = 4.0; taps_started = true
     end
     if crash_timer >= taps_total_dur or crash_timer >= 5.0 then state = "menu"; menu_idx = 1; crash_phase = nil end
   else
@@ -220,7 +219,7 @@ local function draw_ship()
   local function tx(x,y) return math.floor(ship.x + x*cos + y*sin + 0.5), math.floor(ship.y - x*sin + y*cos + 0.5) end
   local a1x,a1y = tx(p0x,p0y); local a2x,a2y = tx(p1x,p1y); local a3x,a3y = tx(p2x,p2y)
   rf.line(a1x,a1y,a2x,a2y,1); rf.line(a2x,a2y,a3x,a3y,1); rf.line(a3x,a3y,a1x,a1y,1)
-  if ship.thrusting then local fx,fy = tx(0,s+2); rf.circfill_rgb(fx,fy,2,255,180,0) end
+  if ship.thrusting then local fx,fy = tx(0,s+2); rf.circfill(fx,fy,2,3) end
 end
 
 function _DRAW()
@@ -230,18 +229,22 @@ function _DRAW()
 end
 
 function draw_menu()
-  rf.print_center("MOON LANDER", 70, 255,255,255)
-  local sel = {r=255,g=255,b=255}; local dim = {r=160,g=160,b=160}
-  local c1 = (menu_idx==1) and sel or dim; local c2 = (menu_idx==2) and sel or dim
-  rf.print_center("PLAY", 100, c1.r,c1.g,c1.b)
-  rf.print_center("QUIT", 116, c2.r,c2.g,c2.b)
-  rf.print_center("Up/Down to select, O/X/Enter to confirm", 140, 200,200,200)
-  rf.print_center("Controls: Left/Right Rotate, Up Thrust", 156, 200,200,200)
-  rf.print_center("Best Level: "..tostring(best_level).."   Best Score: "..tostring(best_score), 176, 200,200,200)
+  rf.print_anchored("MOON LANDER", "topcenter", 1)
+  local c1 = (menu_idx==1) and 1 or 2; local c2 = (menu_idx==2) and 1 or 2
+  local play_x = 240 - string.len("PLAY")*3
+  local quit_x = 240 - string.len("QUIT")*3
+  local confirm_x = 240 - string.len("Up/Down to select, O/X/Enter to confirm")*3
+  local controls_x = 240 - string.len("Controls: Left/Right Rotate, Up Thrust")*3
+  rf.print_xy(play_x, 100, "PLAY", c1)
+  rf.print_xy(quit_x, 116, "QUIT", c2)
+  rf.print_xy(confirm_x, 140, "Up/Down to select, O/X/Enter to confirm", 2)
+  rf.print_xy(controls_x, 156, "Controls: Left/Right Rotate, Up Thrust", 2)
+  local best_text = "Best Level: "..tostring(best_level).."   Best Score: "..tostring(best_score)
+  rf.print_xy(240 - string.len(best_text)*3, 176, best_text, 2)
 end
 
 function draw_hud()
-  rf.print_center("MOON LANDER", 10, 255,255,255)
+  rf.print_anchored("MOON LANDER", "topcenter", 1)
   rf.print_xy(2, 2,   "ALT:"..string.format("%3.0f", ground_y-ship.y), 2)
   rf.print_xy(2, 10,  "VY :"..string.format("%4.1f", ship.vy), 3)
   rf.print_xy(2, 18,  "FUEL:"..string.format("%3.0f", ship.fuel), 4)
@@ -256,7 +259,7 @@ function draw_level()
 end
 
 function draw_messages()
-  if countdown > 0 and ship.alive and not ship.landed then rf.print_center("GET READY:"..tostring(math.ceil(countdown)), 130, 255,255,255); return end
-  if ship.landed then rf.print_center("LANDED!", 130, 255,255,255); return end
-  if not ship.alive and not ship.landed then rf.print_center("CRASHED", 120, 255,255,255); rf.print_center("RETURNING TO MENU...", 140, 200,200,200) end
+  if countdown > 0 and ship.alive and not ship.landed then rf.print_anchored("GET READY:"..tostring(math.ceil(countdown)), "middlecenter", 1); return end
+  if ship.landed then rf.print_anchored("LANDED!", "middlecenter", 1); return end
+  if not ship.alive and not ship.landed then rf.print_xy(240 - string.len("CRASHED")*3, 120, "CRASHED", 1); rf.print_xy(240 - string.len("RETURNING TO MENU...")*3, 140, "RETURNING TO MENU...", 2) end
 end

@@ -28,7 +28,12 @@ func packDir(dir, out string) error {
 	if err := json.Unmarshal(mfBytes, &m); err != nil {
 		return err
 	}
+
 	var assets []cartio.Asset
+	var sfx cartio.SFXMap = make(cartio.SFXMap)
+	var music cartio.MusicMap = make(cartio.MusicMap)
+	var sprites cartio.SpriteMap = make(cartio.SpriteMap)
+
 	// walk assets/
 	assetsDir := filepath.Join(dir, "assets")
 	_ = filepath.WalkDir(assetsDir, func(path string, d fs.DirEntry, err error) error {
@@ -39,6 +44,37 @@ func packDir(dir, out string) error {
 			return nil
 		}
 		rel, _ := filepath.Rel(assetsDir, path)
+
+		// Handle sfx.json, music.json, and sprites.json specially
+		if rel == "sfx.json" {
+			if b, err := os.ReadFile(path); err == nil {
+				if err := json.Unmarshal(b, &sfx); err != nil {
+					// If invalid, use empty map
+					sfx = make(cartio.SFXMap)
+				}
+			}
+			return nil // Don't include in assets
+		}
+		if rel == "music.json" {
+			if b, err := os.ReadFile(path); err == nil {
+				if err := json.Unmarshal(b, &music); err != nil {
+					// If invalid, use empty map
+					music = make(cartio.MusicMap)
+				}
+			}
+			return nil // Don't include in assets
+		}
+		if rel == "sprites.json" {
+			if b, err := os.ReadFile(path); err == nil {
+				if err := json.Unmarshal(b, &sprites); err != nil {
+					// If invalid, use empty map
+					sprites = make(cartio.SpriteMap)
+				}
+			}
+			return nil // Don't include in assets
+		}
+
+		// Regular assets
 		b, err := os.ReadFile(path)
 		if err != nil {
 			return err
@@ -47,7 +83,7 @@ func packDir(dir, out string) error {
 		return nil
 	})
 	var buf bytes.Buffer
-	if err := cartio.Write(&buf, m, assets); err != nil {
+	if err := cartio.Write(&buf, m, assets, sfx, music, sprites); err != nil {
 		return err
 	}
 	return os.WriteFile(out, buf.Bytes(), 0644)
@@ -67,6 +103,7 @@ func savePNG(path string, w, h int, rgba []uint8) error {
 func main() {
 	pack := flag.String("pack", "", "pack cart directory into .rfs (specify input dir)")
 	cart := flag.String("cart", "", "run .rfs cart (specify file path)")
+	folder := flag.String("folder", "", "run cart from folder (development mode with hot reload)")
 	frames := flag.Int("frames", 1, "frames to run when executing a cart (headless)")
 	out := flag.String("out", "", "output PNG path (headless). Omit to disable.")
 	window := flag.Bool("window", false, "open window and run until ESC/Close")
@@ -89,6 +126,33 @@ func main() {
 			panic(err)
 		}
 		if *window {
+			if err := sdlrun.RunWindow(e, *scale); err != nil {
+				panic(err)
+			}
+			return
+		}
+		// headless
+		e.RunFrames(*frames)
+		if *out != "" {
+			if err := savePNG(*out, e.Ren.Width(), e.Ren.Height(), e.Ren.Pixels()); err != nil {
+				panic(err)
+			}
+			println("wrote:", *out)
+		} else {
+			pix := e.Ren.Pixels()
+			_ = color.RGBA{R: pix[0], G: pix[1], B: pix[2], A: pix[3]}
+		}
+		return
+	}
+
+	if *folder != "" {
+		e := engine.New(60)
+		defer e.Close()
+		if err := e.LoadCartFolder(*folder); err != nil {
+			panic(err)
+		}
+		if *window {
+			println("Development mode: Hot reload enabled. Edit files in", *folder)
 			if err := sdlrun.RunWindow(e, *scale); err != nil {
 				panic(err)
 			}

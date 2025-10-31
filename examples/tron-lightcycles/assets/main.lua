@@ -19,10 +19,13 @@ local DIR_RIGHT = 1
 local DIR_DOWN = 2
 local DIR_LEFT = 3
 
--- Color indices (using RetroForge 50 palette: 0-49)
+-- Color indices (using Super Mario 50 palette: 0-49)
 local COLOR_BLACK = 0
 local COLOR_WHITE = 1
 local COLOR_CYAN = 31 -- Light Cyan / Aqua Blue
+local COLOR_GRAY = 25 -- Gray for dimmed text
+local COLOR_RED = 4 -- Red for game over
+local COLOR_BLUE = 48 -- Blue for menu highlights
 
 -- Light cycle color definitions: {head, first_trail, rest_trail}
 -- Pattern: Each color has 3 shades - shadow (darkest), base (middle), highlight (brightest)
@@ -324,8 +327,7 @@ function _INIT()
   menu_time = 0.0
   
   -- Play futuristic menu music
-  local menu_music = {"4C2","4E2","4G2","R1","4A2","4C3","4E3","R1","4G2","4C3","4E3","R2"}
-  rf.music(menu_music, 140, 0.28)
+  rf.music("menu_music")
 end
 
 local function update_menu(dt)
@@ -345,8 +347,7 @@ local function update_menu(dt)
       init_level(level)
       state = "playing"
       countdown = 3.0
-      local start_melody = {"4C2","4E2","4G2","R1","4G2","4C3"}
-      rf.music(start_melody, 140, 0.25)
+      rf.music("start_melody")
     else
       rf.sfx("select")
       rf.quit()
@@ -506,30 +507,31 @@ local function draw_menu()
     end
   end
   
-  -- Glowing title with animation
-  local title_y = 50 + math.sin(menu_time * 2) * 3
-  local title_glow = math.floor(100 + 155 * (0.5 + 0.5 * math.sin(menu_time * 3)))
+  -- Title at top center
+  rf.print_anchored("TRON", "topcenter", COLOR_BLUE)
+  local cycles_y = 70
+  local cycles_x = 240 - string.len("LIGHT CYCLES")*3
+  rf.print_xy(cycles_x, cycles_y, "LIGHT CYCLES", COLOR_BLUE)
   
-  rf.print_center("TRON", title_y, 0, title_glow, 255)
-  rf.print_center("LIGHT CYCLES", title_y + 20, 0, title_glow, 255)
+  -- Menu items (use blue for selected, gray for dimmed)
+  local c1 = (menu_idx == 1) and COLOR_BLUE or COLOR_GRAY
+  local c2 = (menu_idx == 2) and COLOR_BLUE or COLOR_GRAY
   
-  -- Pulsing menu items
-  local pulse = 0.5 + 0.5 * math.sin(menu_time * 4)
-  local sel_bright = math.floor(200 + 55 * pulse)
-  local sel = {r=0, g=sel_bright, b=255}
-  local dim = {r=100, g=100, b=150}
-  local c1 = (menu_idx == 1) and sel or dim
-  local c2 = (menu_idx == 2) and sel or dim
+  local play_x = 240 - string.len("PLAY")*3
+  local quit_x = 240 - string.len("QUIT")*3
+  rf.print_xy(play_x, 110, "PLAY", c1)
+  rf.print_xy(quit_x, 126, "QUIT", c2)
   
-  rf.print_center("PLAY", 110, c1.r, c1.g, c1.b)
-  rf.print_center("QUIT", 126, c2.r, c2.g, c2.b)
+  -- Instructions
+  local turn_x = 240 - string.len("Arrow keys: Turn")*3
+  local select_x = 240 - string.len("O/X/Enter: Select")*3
+  rf.print_xy(turn_x, 160, "Arrow keys: Turn", COLOR_GRAY)
+  rf.print_xy(select_x, 176, "O/X/Enter: Select", COLOR_GRAY)
   
-  -- Instructions with color
-  rf.print_center("Arrow keys: Turn", 160, 100, 200, 255)
-  rf.print_center("O/X/Enter: Select", 176, 100, 200, 255)
-  
-  -- Best score with glow
-  rf.print_center("Best Level: " .. tostring(best_level), 210, 200, 200, 255)
+  -- Best score
+  local best_text = "Best Level: " .. tostring(best_level)
+  local best_x = 240 - string.len(best_text)*3
+  rf.print_xy(best_x, 210, best_text, COLOR_GRAY)
   
   -- Decorative light cycle trails
   local trail_time = menu_time * 0.5
@@ -576,11 +578,16 @@ local function draw_playing()
   
   -- Draw countdown
   if countdown > 0 then
-    rf.print_center("LEVEL " .. tostring(level), 120, 255, 255, 255)
+    local level_text = "LEVEL " .. tostring(level)
+    local level_x = 240 - string.len(level_text)*3
+    rf.print_xy(level_x, 120, level_text, COLOR_WHITE)
     if math.ceil(countdown) > 0 then
-      rf.print_center("GET READY: " .. tostring(math.ceil(countdown)), 140, 255, 255, 255)
+      local ready_text = "GET READY: " .. tostring(math.ceil(countdown))
+      local ready_x = 240 - string.len(ready_text)*3
+      rf.print_xy(ready_x, 140, ready_text, COLOR_WHITE)
     else
-      rf.print_center("GO!", 140, 255, 255, 255)
+      local go_x = 240 - string.len("GO!")*3
+      rf.print_xy(go_x, 140, "GO!", COLOR_WHITE)
     end
   end
 end
@@ -604,11 +611,18 @@ local function draw_gameover()
   
   draw_hud()
   
-  rf.print_center("GAME OVER", 110, 255, 100, 100)
-  rf.print_center("Level: " .. tostring(level), 130, 255, 255, 255)
-  rf.print_center("Score: " .. tostring(score), 150, 255, 255, 255)
+  local gameover_x = 240 - string.len("GAME OVER")*3
+  local level_text = "Level: " .. tostring(level)
+  local level_x = 240 - string.len(level_text)*3
+  local score_text = "Score: " .. tostring(score)
+  local score_x = 240 - string.len(score_text)*3
+  rf.print_xy(gameover_x, 110, "GAME OVER", COLOR_RED)
+  rf.print_xy(level_x, 130, level_text, COLOR_WHITE)
+  rf.print_xy(score_x, 150, score_text, COLOR_WHITE)
   if gameover_timer >= 3.0 then
-    rf.print_center("Press O/X/Enter to continue", 170, 200, 200, 200)
+    local continue_text = "Press O/X/Enter to continue"
+    local continue_x = 240 - string.len(continue_text)*3
+    rf.print_xy(continue_x, 170, continue_text, COLOR_GRAY)
   end
 end
 

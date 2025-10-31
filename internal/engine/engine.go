@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/AndrewDonelson/retroforge-engine/internal/lua"
 	"github.com/AndrewDonelson/retroforge-engine/internal/luabind"
 	"github.com/AndrewDonelson/retroforge-engine/internal/pal"
+	"github.com/AndrewDonelson/retroforge-engine/internal/physics"
 	"github.com/AndrewDonelson/retroforge-engine/internal/rendersoft"
 	"github.com/AndrewDonelson/retroforge-engine/internal/runner"
 	"github.com/AndrewDonelson/retroforge-engine/internal/scheduler"
@@ -18,12 +20,17 @@ import (
 
 // Engine wires together bus, scheduler/runner, and Lua VM for headless runs.
 type Engine struct {
-	Bus   *eventbus.Bus
-	Sched *scheduler.Scheduler
-	Run   *runner.Runner
-	VM    *lua.VM
-	Ren   graphics.Renderer
-	Pal   *pal.Manager
+	Bus        *eventbus.Bus
+	Sched      *scheduler.Scheduler
+	Run        *runner.Runner
+	VM         *lua.VM
+	Ren        graphics.Renderer
+	Pal        *pal.Manager
+	Physics    *physics.World
+	sfxMap     cartio.SFXMap
+	musicMap   cartio.MusicMap
+	spritesMap cartio.SpriteMap
+	devMode    *DevMode // Development mode (only when loading from folder)
 }
 
 func New(targetFPS int) *Engine {
@@ -32,29 +39,111 @@ func New(targetFPS int) *Engine {
 	run := runner.New(bus, sched)
 	vm := lua.New()
 	ren := rendersoft.New(480, 270)
-	e := &Engine{Bus: bus, Sched: sched, Run: run, VM: vm, Ren: ren, Pal: pal.NewManager()}
+	phys := physics.NewWorld(0, 9.8) // Default gravity: down (Y+) like real physics
+	e := &Engine{
+		Bus:     bus,
+		Sched:   sched,
+		Run:     run,
+		VM:      vm,
+		Ren:     ren,
+		Pal:     pal.NewManager(),
+		Physics: phys,
+	}
 	// On each tick, call Lua update with dt seconds.
 	bus.Subscribe("tick", func(v any) {
 		if dt, ok := v.(time.Duration); ok {
-			_ = e.VM.CallUpdate(dt.Seconds())
+			dtSec := dt.Seconds()
+
+			// Check for hot reload (development mode only)
+			if e.devMode != nil && e.devMode.CheckForReload() {
+				// Reload in background (don't block)
+				go func() {
+					if err := e.ReloadCart(); err != nil {
+						e.devMode.AddDebugLog(fmt.Sprintf("Reload failed: %v", err))
+					}
+				}()
+			}
+
+			// Step physics before Lua update
+			e.Physics.Step()
+			_ = e.VM.CallUpdate(dtSec)
 			_ = e.VM.CallDraw()
+
+			// Update debug stats (development mode only)
+			if e.devMode != nil && e.devMode.IsEnabled() {
+				fps := 1.0 / dtSec
+				e.devMode.UpdateStats(fps, 0, 0) // Frame count and Lua memory would need more work
+			}
 		}
 	})
 	return e
 }
 
-func (e *Engine) Close() { e.VM.Close() }
+func (e *Engine) Close() {
+	if e.devMode != nil {
+		e.devMode.Disable()
+	}
+	e.VM.Close()
+}
+
+// devModeAdapter adapts engine.DevMode to luabind.DevModeHandler interface
+type devModeAdapter struct {
+	devMode *DevMode
+}
+
+func (a *devModeAdapter) IsEnabled() bool {
+	return a.devMode.IsEnabled()
+}
+
+func (a *devModeAdapter) AddDebugLog(msg string) {
+	a.devMode.AddDebugLog(msg)
+}
+
+func (a *devModeAdapter) GetStats() interface{} {
+	// Convert engine.DevStats to luabind.DevStats-compatible structure
+	stats := a.devMode.GetStats()
+	// Return struct with matching fields (luabind will type assert)
+	return struct {
+		FPS         float64
+		FrameCount  int64
+		LuaMemory   int64
+		LoadTime    time.Duration
+		LastReload  time.Time
+		ReloadCount int
+	}{
+		FPS:         stats.FPS,
+		FrameCount:  stats.FrameCount,
+		LuaMemory:   stats.LuaMemory,
+		LoadTime:    stats.LoadTime,
+		LastReload:  stats.LastReload,
+		ReloadCount: stats.ReloadCount,
+	}
+}
 
 // LoadLuaSource loads script and calls init() if present.
 func (e *Engine) LoadLuaSource(src string) error {
-	luabind.Register(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
-		col := e.Pal.Color(i)
-		c[0] = col.R
-		c[1] = col.G
-		c[2] = col.B
-		c[3] = col.A
-		return
-	}, e.Pal.Set)
+	// Register with dev mode if available
+	if e.devMode != nil && e.devMode.IsEnabled() {
+		// Create adapter that implements DevModeHandler interface
+		devAdapter := &devModeAdapter{devMode: e.devMode}
+		luabind.RegisterWithDev(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
+			col := e.Pal.Color(i)
+			c[0] = col.R
+			c[1] = col.G
+			c[2] = col.B
+			c[3] = col.A
+			return
+		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics, devAdapter)
+	} else {
+		luabind.Register(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
+			col := e.Pal.Color(i)
+			c[0] = col.R
+			c[1] = col.G
+			c[2] = col.B
+			c[3] = col.A
+			return
+		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics)
+	}
 	if err := e.VM.LoadString(src); err != nil {
 		return err
 	}
@@ -70,20 +159,26 @@ func (e *Engine) RunFrames(n int) {
 
 // LoadCartFromReader loads a .rfs from an io.ReaderAt.
 func (e *Engine) LoadCartFromReader(r io.ReaderAt, size int64) error {
-	m, files, err := cartio.Read(r, size)
+	result, err := cartio.Read(r, size)
 	if err != nil {
 		return err
 	}
 
 	// Set palette from manifest if specified
-	if m.Palette != "" {
-		e.Pal.Set(m.Palette)
+	if result.Manifest.Palette != "" {
+		e.Pal.Set(result.Manifest.Palette)
 	}
 
-	src, ok := files["assets/"+m.Entry]
+	src, ok := result.Files["assets/"+result.Manifest.Entry]
 	if !ok {
 		return os.ErrNotExist
 	}
+
+	// Store SFX, Music, and Sprites for Lua bindings
+	e.sfxMap = result.SFX
+	e.musicMap = result.Music
+	e.spritesMap = result.Sprites
+
 	return e.LoadLuaSource(string(src))
 }
 

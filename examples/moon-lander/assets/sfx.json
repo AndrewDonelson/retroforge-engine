@@ -1,0 +1,39 @@
+{
+  "move": {
+    "type": "sine",
+    "freq": 520,
+    "duration": 0.05,
+    "gain": 0.25
+  },
+  "select": {
+    "type": "sine",
+    "freq": 700,
+    "duration": 0.08,
+    "gain": 0.3
+  },
+  "thrust": {
+    "type": "thrust",
+    "freq": 110,
+    "duration": 0,
+    "gain": 0.2
+  },
+  "land": {
+    "type": "sine",
+    "freq": 880,
+    "duration": 0.12,
+    "gain": 0.3
+  },
+  "stopall": {
+    "type": "stopall",
+    "freq": 0,
+    "duration": 0,
+    "gain": 0
+  },
+  "crash": {
+    "type": "noise",
+    "freq": 0,
+    "duration": 0.25,
+    "gain": 0.4
+  }
+}
+

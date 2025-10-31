@@ -11,7 +11,7 @@ end
 
 function _DRAW()
   rf.clear_i(0)
-  rf.print_center("HELLO FROM RETROFORGE", 135, 255,255,255)
+  rf.print_anchored("HELLO FROM RETROFORGE", "middlecenter", 1)
   rf.print_xy(2, 2, "SCORE:"..tostring(1234), math.floor(color_index))
 end
 

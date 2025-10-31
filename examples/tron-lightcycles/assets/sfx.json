@@ -1,0 +1,27 @@
+{
+  "move": {
+    "type": "sine",
+    "freq": 520,
+    "duration": 0.05,
+    "gain": 0.25
+  },
+  "select": {
+    "type": "sine",
+    "freq": 700,
+    "duration": 0.08,
+    "gain": 0.3
+  },
+  "crash": {
+    "type": "noise",
+    "freq": 0,
+    "duration": 0.25,
+    "gain": 0.4
+  },
+  "land": {
+    "type": "sine",
+    "freq": 880,
+    "duration": 0.12,
+    "gain": 0.3
+  }
+}
+

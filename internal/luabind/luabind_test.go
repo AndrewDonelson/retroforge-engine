@@ -3,6 +3,7 @@ package luabind
 import (
 	"testing"
 
+	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
 	"github.com/AndrewDonelson/retroforge-engine/internal/rendersoft"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -25,7 +26,7 @@ func TestRegister(t *testing.T) {
 		_ = name // not implemented yet
 	}
 
-	Register(L, r, colorByIndex, setPalette)
+	Register(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Verify rf table exists
 	rf := L.GetGlobal("rf")
@@ -37,8 +38,10 @@ func TestRegister(t *testing.T) {
 	}
 
 	// Verify some functions exist
-	fields := []string{"clear", "print_center", "print_xy", "clear_i",
-		"btn", "btnp", "sfx", "tone", "noise", "music", "quit"}
+	fields := []string{"clear_i", "print", "print_xy", "print_anchored", "cursor", "color",
+		"btn", "btnp", "sfx", "tone", "noise", "music", "cstore", "reload",
+		"flr", "ceil", "rnd", "mid", "sgn", "chr", "ord",
+		"shl", "shr", "band", "bor", "bxor", "bnot", "quit"}
 	for _, field := range fields {
 		val := L.GetField(rf, field)
 		if val == lua.LNil {
@@ -55,18 +58,23 @@ func TestClearFunction(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(10, 10)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) {
+		if i == 1 {
+			return [4]uint8{255, 128, 64, 255}
+		}
+		return [4]uint8{0, 0, 0, 255}
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
-	// Call rf.clear(255, 128, 64)
-	err := L.DoString(`rf.clear(255, 128, 64)`)
+	// Call rf.clear_i(1) - uses palette index
+	err := L.DoString(`rf.clear_i(1)`)
 	if err != nil {
-		t.Fatalf("rf.clear should not error: %v", err)
+		t.Fatalf("rf.clear_i should not error: %v", err)
 	}
 
-	// Verify pixels were cleared
+	// Verify pixels were cleared with palette color
 	pix := r.Pixels()
 	if pix[0] != 255 || pix[1] != 128 || pix[2] != 64 {
-		t.Fatalf("clear should set pixels")
+		t.Fatalf("clear_i should set pixels with palette color")
 	}
 }
 
@@ -83,7 +91,7 @@ func TestClearIFunction(t *testing.T) {
 		}
 		return [4]uint8{0, 0, 0, 255}
 	}
-	Register(L, r, colorByIndex, nil)
+	Register(L, r, colorByIndex, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Call rf.clear_i(1)
 	err := L.DoString(`rf.clear_i(1)`)
@@ -107,7 +115,7 @@ func TestInputFunctions(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(10, 10)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Test btn (should return boolean)
 	err := L.DoString(`local result = rf.btn(0); if type(result) ~= "boolean" then error("btn should return boolean") end`)
@@ -127,18 +135,24 @@ func TestPrintFunctions(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
-	// Test print_center
-	err := L.DoString(`rf.print_center("HELLO", 50, 255, 255, 255)`)
+	// Test print with cursor/color state
+	err := L.DoString(`rf.cursor(10, 20); rf.color(5); rf.print("HELLO")`)
 	if err != nil {
-		t.Fatalf("rf.print_center should not error: %v", err)
+		t.Fatalf("rf.print with cursor/color should not error: %v", err)
 	}
 
 	// Test print_xy
 	err = L.DoString(`rf.print_xy(10, 20, "TEST", 1)`)
 	if err != nil {
 		t.Fatalf("rf.print_xy should not error: %v", err)
+	}
+
+	// Test print with explicit coordinates
+	err = L.DoString(`rf.print("WORLD", 30, 40, 2)`)
+	if err != nil {
+		t.Fatalf("rf.print with explicit coords should not error: %v", err)
 	}
 }
 
@@ -147,28 +161,28 @@ func TestLuaInvalidParameters(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
-	// Test clear with wrong number of args
-	err := L.DoString(`rf.clear(255)`) // missing args
+	// Test clear_i with wrong number of args
+	err := L.DoString(`rf.clear_i()`) // missing args
 	if err == nil {
-		t.Fatalf("rf.clear with insufficient args should error")
+		t.Fatalf("rf.clear_i with insufficient args should error")
 	}
 
-	err = L.DoString(`rf.clear(255, 128)`) // missing arg
+	err = L.DoString(`rf.clear_i("invalid")`) // wrong type
 	if err == nil {
-		t.Fatalf("rf.clear with insufficient args should error")
+		t.Fatalf("rf.clear_i with wrong type should error")
 	}
 
-	err = L.DoString(`rf.clear("invalid", 128, 64)`) // wrong type
-	if err == nil {
-		t.Fatalf("rf.clear with wrong type should error")
+	// Test cursor/color functions
+	err = L.DoString(`rf.cursor(10, 20)`)
+	if err != nil {
+		t.Fatalf("rf.cursor should not error: %v", err)
 	}
 
-	// Test print_center with wrong args
-	err = L.DoString(`rf.print_center("TEST")`) // missing args
-	if err == nil {
-		t.Fatalf("rf.print_center with insufficient args should error")
+	err = L.DoString(`rf.color(5)`)
+	if err != nil {
+		t.Fatalf("rf.color should not error: %v", err)
 	}
 
 	// Test btn with wrong type
@@ -188,11 +202,11 @@ func TestLuaInvalidParameters(t *testing.T) {
 		t.Fatalf("rf.btn(999) should not error, just return false")
 	}
 
-	// Test out of range color values (uint8 wraps, function still executes)
-	err = L.DoString(`rf.clear(999, -10, 256)`) // out of range
-	// Note: Lua CheckInt allows any int, uint8 will wrap, but function should execute
+	// Test clear_i with out of range index
+	err = L.DoString(`rf.clear_i(999)`) // out of range
+	// Note: Lua CheckInt allows any int, colorByIndex handles it
 	if err != nil {
-		t.Logf("rf.clear with out of range values failed: %v (may be expected)", err)
+		t.Logf("rf.clear_i with out of range index failed: %v (may be expected)", err)
 	}
 }
 
@@ -206,7 +220,7 @@ func TestLuaEdgeCases(t *testing.T) {
 			return [4]uint8{0, 0, 0, 255}
 		}
 		return [4]uint8{255, 255, 255, 255}
-	}, nil)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Test with nil/empty values
 	err := L.DoString(`rf.print_xy(0, 0, "", 0)`) // empty string
@@ -269,7 +283,7 @@ func TestLuaInvalidFunctions(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Test calling non-existent function
 	err := L.DoString(`rf.nonexistent()`)
@@ -289,7 +303,7 @@ func TestLuaMusicEdgeCases(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Test music with empty table
 	err := L.DoString(`rf.music({}, 120, 0.3)`)
@@ -337,7 +351,7 @@ func TestLuaAudioEdgeCases(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Test sfx with invalid name
 	err := L.DoString(`rf.sfx("nonexistent")`)
@@ -396,7 +410,7 @@ func TestLuaNilColorByIndex(t *testing.T) {
 		return [4]uint8{0, 0, 0, 0} // zero alpha
 	}
 
-	Register(L, r, colorByIndex, nil)
+	Register(L, r, colorByIndex, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// Should work even with zero alpha
 	err := L.DoString(`rf.clear_i(0)`)
@@ -412,11 +426,86 @@ func TestLuaNilSetPalette(t *testing.T) {
 	r := rendersoft.New(100, 100)
 
 	// Test with nil setPalette
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
 
 	// palette_set should work even if setPalette is nil
 	err := L.DoString(`rf.palette_set("default")`)
 	if err != nil {
 		t.Fatalf("rf.palette_set should work even with nil callback")
 	}
+}
+
+func TestRegisterWithDev(t *testing.T) {
+	L := lua.NewState()
+	defer L.Close()
+
+	r := rendersoft.New(480, 270)
+	colorByIndex := func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }
+	setPalette := func(name string) {}
+
+	// Create a mock dev mode handler
+	mockDevMode := &mockDevModeHandler{enabled: true}
+
+	RegisterWithDev(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, mockDevMode)
+
+	// Verify rf table exists
+	rf := L.GetGlobal("rf")
+	if rf == lua.LNil {
+		t.Fatal("rf table should exist")
+	}
+
+	// Verify debug functions are available (when dev mode is enabled)
+	printh := L.GetField(rf.(*lua.LTable), "printh")
+	if printh == lua.LNil {
+		t.Error("rf.printh should exist when dev mode is enabled")
+	}
+
+	stat := L.GetField(rf.(*lua.LTable), "stat")
+	if stat == lua.LNil {
+		t.Error("rf.stat should exist when dev mode is enabled")
+	}
+
+	timeFunc := L.GetField(rf.(*lua.LTable), "time")
+	if timeFunc == lua.LNil {
+		t.Error("rf.time should exist when dev mode is enabled")
+	}
+
+	// Test calling debug functions
+	err := L.DoString(`rf.printh("test message")`)
+	if err != nil {
+		t.Errorf("rf.printh failed: %v", err)
+	}
+}
+
+// mockDevModeHandler implements DevModeHandler for testing
+type mockDevModeHandler struct {
+	enabled bool
+	logs    []string
+	stats   interface{}
+}
+
+func (m *mockDevModeHandler) IsEnabled() bool {
+	return m.enabled
+}
+
+func (m *mockDevModeHandler) AddDebugLog(msg string) {
+	m.logs = append(m.logs, msg)
+}
+
+func (m *mockDevModeHandler) GetStats() interface{} {
+	if m.stats == nil {
+		return struct {
+			FPS         float64
+			FrameCount  int64
+			LuaMemory   int64
+			LoadTime    interface{}
+			LastReload  interface{}
+			ReloadCount int
+		}{
+			FPS:        60.0,
+			FrameCount: 1000,
+			LuaMemory:  1024,
+		}
+	}
+	return m.stats
 }
