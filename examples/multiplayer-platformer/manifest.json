@@ -4,6 +4,7 @@
   "author": "RetroForge Team",
   "description": "Simple platformer demonstrating multiplayer sync",
   "entry": "main.lua",
+  "palette": "SNES 50",
   "multiplayer": {
     "enabled": true,
     "minPlayers": 2,

@@ -55,9 +55,10 @@ func RunWindow(e *engine.Engine, scale int) error {
 			case *sdl.QuitEvent:
 				running = false
 			case *sdl.KeyboardEvent:
-				if ev.Type == sdl.KEYDOWN && ev.Keysym.Sym == sdl.K_ESCAPE {
-					running = false
-				}
+				// ESC quitting disabled - games handle quitting through their own menus
+				// if ev.Type == sdl.KEYDOWN && ev.Keysym.Sym == sdl.K_ESCAPE {
+				// 	running = false
+				// }
 				down := ev.Type == sdl.KEYDOWN
 				if ev.Type == sdl.KEYDOWN && ev.Keysym.Sym == sdl.K_PRINTSCREEN {
 					// Save screenshot
