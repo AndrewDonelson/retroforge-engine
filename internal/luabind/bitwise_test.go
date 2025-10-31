@@ -13,7 +13,7 @@ func TestBitwiseShl(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test basic shift left
 	err := L.DoString(`local result = rf.shl(1, 3); if result ~= 8 then error("Expected 8, got " .. result) end`)
@@ -57,7 +57,7 @@ func TestBitwiseShr(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test basic shift right
 	err := L.DoString(`local result = rf.shr(8, 3); if result ~= 1 then error("Expected 1, got " .. result) end`)
@@ -101,7 +101,7 @@ func TestBitwiseBand(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test basic AND
 	err := L.DoString(`local result = rf.band(5, 3); if result ~= 1 then error("Expected 1, got " .. result) end`)
@@ -139,7 +139,7 @@ func TestBitwiseBor(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test basic OR
 	err := L.DoString(`local result = rf.bor(5, 3); if result ~= 7 then error("Expected 7, got " .. result) end`)
@@ -171,7 +171,7 @@ func TestBitwiseBxor(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test basic XOR
 	err := L.DoString(`local result = rf.bxor(5, 3); if result ~= 6 then error("Expected 6, got " .. result) end`)
@@ -209,7 +209,7 @@ func TestBitwiseBnot(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test NOT of 0 (should be -1 for signed integers)
 	err := L.DoString(`local result = rf.bnot(0); if result ~= -1 then error("Expected -1, got " .. result) end`)
@@ -247,7 +247,7 @@ func TestBitwiseCombined(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test combined operations
 	err := L.DoString(`
@@ -296,7 +296,7 @@ func TestBitwiseEdgeCases(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test with floating point numbers (should convert to int)
 	err := L.DoString(`local result = rf.band(5.7, 3.2); if result ~= 1 then error("Expected 1, got " .. result) end`)

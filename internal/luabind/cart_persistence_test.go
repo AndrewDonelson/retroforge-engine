@@ -17,7 +17,7 @@ func TestCstore(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Set up test data in runtime memory
 	runtimeMem := state.GetMemory()
@@ -63,7 +63,7 @@ func TestReload(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Set up test data in cart storage
 	cartStore := state.GetCartStore()
@@ -114,7 +114,7 @@ func TestCstoreReloadRoundTrip(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Set up test data
 	runtimeMem := state.GetMemory()
@@ -155,7 +155,7 @@ func TestCstoreEdgeCases(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	runtimeMem := state.GetMemory()
 	runtimeMem[0] = 0x42
@@ -219,7 +219,7 @@ func TestReloadEdgeCases(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	cartStore := state.GetCartStore()
 	cartStore[0] = 0x42
@@ -283,7 +283,7 @@ func TestCstoreReloadOverlap(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Test overlapping regions (copy should handle correctly)
 	runtimeMem := state.GetMemory()

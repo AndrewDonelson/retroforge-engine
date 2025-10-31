@@ -15,7 +15,7 @@ func TestFlr(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test basic floor operations
 	testCases := []struct {
@@ -69,7 +69,7 @@ func TestCeil(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test basic ceiling operations
 	testCases := []struct {
@@ -114,7 +114,7 @@ func TestRnd(t *testing.T) {
 
 	r := rendersoft.New(480, 270)
 	state := NewState()
-	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Test rnd() with no arguments (should return 0.0 to 1.0, exclusive of 1.0)
 	values := make([]float64, 100)
@@ -196,7 +196,7 @@ func TestMid(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	testCases := []struct {
 		x, y, z, expected float64
@@ -234,7 +234,7 @@ func TestSgn(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	testCases := []struct {
 		input    float64
@@ -278,7 +278,7 @@ func TestChr(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	testCases := []struct {
 		input    int
@@ -350,7 +350,7 @@ func TestOrd(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(480, 270)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	testCases := []struct {
 		input    string
@@ -444,7 +444,7 @@ func TestHelperFunctionsCombined(t *testing.T) {
 
 	r := rendersoft.New(480, 270)
 	state := NewState()
-	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Test practical combinations
 	err := L.DoString(`

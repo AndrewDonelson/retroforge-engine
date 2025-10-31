@@ -10,6 +10,7 @@ import (
 	"github.com/AndrewDonelson/retroforge-engine/internal/font"
 	"github.com/AndrewDonelson/retroforge-engine/internal/graphics"
 	"github.com/AndrewDonelson/retroforge-engine/internal/input"
+	"github.com/AndrewDonelson/retroforge-engine/internal/network"
 	"github.com/AndrewDonelson/retroforge-engine/internal/physics"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -35,24 +36,24 @@ type DevStats struct {
 }
 
 // Register attaches rf.* drawing functions to the Lua state.
-func Register(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World) {
+func Register(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, netMgr *network.NetworkManager) {
 	state := NewState()
-	RegisterWithState(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state)
+	RegisterWithState(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, netMgr)
 }
 
 // RegisterWithDev attaches rf.* drawing functions with dev mode support
-func RegisterWithDev(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, devMode DevModeHandler) {
+func RegisterWithDev(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, devMode DevModeHandler, netMgr *network.NetworkManager) {
 	state := NewState()
-	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, devMode)
+	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, devMode, netMgr)
 }
 
 // RegisterWithState attaches rf.* drawing functions with state management
-func RegisterWithState(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, state *State) {
-	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, nil)
+func RegisterWithState(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, state *State, netMgr *network.NetworkManager) {
+	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, nil, netMgr)
 }
 
 // RegisterWithDevMode attaches rf.* drawing functions with dev mode support
-func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, state *State, devMode DevModeHandler) {
+func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, state *State, devMode DevModeHandler, netMgr *network.NetworkManager) {
 	rf := L.NewTable()
 	L.SetGlobal("rf", rf)
 
@@ -408,6 +409,22 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 	// Input
 	L.SetField(rf, "btn", L.NewFunction(func(L *lua.LState) int {
 		i := L.CheckInt(1)
+
+		// Check if this is a multiplayer call: rf.btn(player_id, button)
+		if L.GetTop() >= 2 {
+			playerID := i
+			buttonID := L.CheckInt(2)
+			if netMgr != nil && netMgr.IsHost() {
+				// Host can check other players' inputs
+				L.Push(lua.LBool(netMgr.GetPlayerInput(playerID, buttonID)))
+				return 1
+			}
+			// Non-host trying to check other player - not allowed
+			L.Push(lua.LBool(false))
+			return 1
+		}
+
+		// Normal single-player or local player input
 		L.Push(lua.LBool(input.Btn(i)))
 		return 1
 	}))
@@ -416,6 +433,106 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		L.Push(lua.LBool(input.Btnp(i)))
 		return 1
 	}))
+	L.SetField(rf, "btnr", L.NewFunction(func(L *lua.LState) int {
+		_ = L.CheckInt(1) // Button ID - release detection not yet implemented
+		// Button release detection (not yet implemented in input package)
+		// For now, return false
+		L.Push(lua.LBool(false))
+		return 1
+	}))
+
+	// Multiplayer API
+	if netMgr != nil {
+		// rf.is_multiplayer() → boolean
+		L.SetField(rf, "is_multiplayer", L.NewFunction(func(L *lua.LState) int {
+			L.Push(lua.LBool(netMgr.IsMultiplayer()))
+			return 1
+		}))
+
+		// rf.player_count() → number (1-6)
+		L.SetField(rf, "player_count", L.NewFunction(func(L *lua.LState) int {
+			L.Push(lua.LNumber(netMgr.PlayerCount()))
+			return 1
+		}))
+
+		// rf.my_player_id() → number (1-6)
+		L.SetField(rf, "my_player_id", L.NewFunction(func(L *lua.LState) int {
+			L.Push(lua.LNumber(netMgr.PlayerID()))
+			return 1
+		}))
+
+		// rf.is_host() → boolean
+		L.SetField(rf, "is_host", L.NewFunction(func(L *lua.LState) int {
+			L.Push(lua.LBool(netMgr.IsHost()))
+			return 1
+		}))
+
+		// rf.network_sync(table, tier)
+		L.SetField(rf, "network_sync", L.NewFunction(func(L *lua.LState) int {
+			tbl := L.CheckTable(1)
+			tierStr := L.CheckString(2)
+
+			// Convert Lua table to map
+			stateMap := make(map[string]interface{})
+			tbl.ForEach(func(k, v lua.LValue) {
+				key := k.String()
+				var val interface{}
+				switch lv := v.(type) {
+				case lua.LNumber:
+					val = float64(lv)
+				case lua.LString:
+					val = string(lv)
+				case lua.LBool:
+					val = bool(lv)
+				case *lua.LTable:
+					// Nested table - convert recursively (simplified)
+					nested := make(map[string]interface{})
+					lv.ForEach(func(k2, v2 lua.LValue) {
+						nested[k2.String()] = v2.String()
+					})
+					val = nested
+				default:
+					val = lv.String()
+				}
+				stateMap[key] = val
+			})
+
+			// Register table for sync (using table path from Lua)
+			var tier network.SyncTier
+			switch tierStr {
+			case "fast":
+				tier = network.SyncTierFast
+			case "moderate":
+				tier = network.SyncTierModerate
+			case "slow":
+				tier = network.SyncTierSlow
+			default:
+				msg := lua.LString("invalid tier: must be 'fast', 'moderate', or 'slow'")
+				L.Push(msg)
+				return 1 // Return error message
+			}
+
+			// Use a simple path (we'll need to track table references properly)
+			tablePath := "lua_table" // Simplified - in real implementation, track by Lua reference
+			err := netMgr.RegisterSyncedTable(tablePath, tier, stateMap)
+			if err != nil {
+				msg := lua.LString(err.Error())
+				L.Push(msg)
+				return 1 // Return error message
+			}
+
+			return 0
+		}))
+
+		// rf.network_unsync(table)
+		L.SetField(rf, "network_unsync", L.NewFunction(func(L *lua.LState) int {
+			tbl := L.CheckTable(1)
+			_ = tbl                  // For now, simplified - would need to track table references
+			tablePath := "lua_table" // Simplified
+			netMgr.UnregisterSyncedTable(tablePath)
+			return 0
+		}))
+	}
 
 	// Sound effects
 	L.SetField(rf, "sfx", L.NewFunction(func(L *lua.LState) int {

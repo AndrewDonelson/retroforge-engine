@@ -11,6 +11,7 @@ import (
 	"github.com/AndrewDonelson/retroforge-engine/internal/graphics"
 	"github.com/AndrewDonelson/retroforge-engine/internal/lua"
 	"github.com/AndrewDonelson/retroforge-engine/internal/luabind"
+	"github.com/AndrewDonelson/retroforge-engine/internal/network"
 	"github.com/AndrewDonelson/retroforge-engine/internal/pal"
 	"github.com/AndrewDonelson/retroforge-engine/internal/physics"
 	"github.com/AndrewDonelson/retroforge-engine/internal/rendersoft"
@@ -27,6 +28,7 @@ type Engine struct {
 	Ren        graphics.Renderer
 	Pal        *pal.Manager
 	Physics    *physics.World
+	Network    *network.NetworkManager // Multiplayer networking
 	sfxMap     cartio.SFXMap
 	musicMap   cartio.MusicMap
 	spritesMap cartio.SpriteMap
@@ -48,6 +50,7 @@ func New(targetFPS int) *Engine {
 		Ren:     ren,
 		Pal:     pal.NewManager(),
 		Physics: phys,
+		Network: network.NewNetworkManager(),
 	}
 	// On each tick, call Lua update with dt seconds.
 	bus.Subscribe("tick", func(v any) {
@@ -66,6 +69,10 @@ func New(targetFPS int) *Engine {
 
 			// Step physics before Lua update
 			e.Physics.Step()
+
+			// Update network frame (for multiplayer sync)
+			e.Network.UpdateFrame(dt)
+
 			_ = e.VM.CallUpdate(dtSec)
 			_ = e.VM.CallDraw()
 
@@ -82,6 +89,9 @@ func New(targetFPS int) *Engine {
 func (e *Engine) Close() {
 	if e.devMode != nil {
 		e.devMode.Disable()
+	}
+	if e.Network != nil {
+		e.Network.Close()
 	}
 	e.VM.Close()
 }
@@ -133,7 +143,7 @@ func (e *Engine) LoadLuaSource(src string) error {
 			c[2] = col.B
 			c[3] = col.A
 			return
-		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics, devAdapter)
+		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics, devAdapter, e.Network)
 	} else {
 		luabind.Register(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
 			col := e.Pal.Color(i)
@@ -142,7 +152,7 @@ func (e *Engine) LoadLuaSource(src string) error {
 			c[2] = col.B
 			c[3] = col.A
 			return
-		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics)
+		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics, e.Network)
 	}
 	if err := e.VM.LoadString(src); err != nil {
 		return err

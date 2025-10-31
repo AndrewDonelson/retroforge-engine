@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "title": "Multiplayer Platformer Demo",
+  "author": "RetroForge Team",
+  "description": "Simple platformer demonstrating multiplayer sync",
+  "entry": "main.lua",
+  "multiplayer": {
+    "enabled": true,
+    "minPlayers": 2,
+    "maxPlayers": 6,
+    "supportsSolo": true,
+    "description": "Race to the top, avoid falling!"
+  },
+  "tags": ["demo", "platformer", "multiplayer"],
+  "cartVersion": "1.0.0",
+  "engineVersion": "2.0.0"
+}
+

@@ -17,7 +17,7 @@ func TestCursor(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Test setting cursor
 	err := L.DoString(`rf.cursor(10, 20)`)
@@ -76,7 +76,7 @@ func TestColor(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Test setting color
 	err := L.DoString(`rf.color(5)`)
@@ -138,7 +138,7 @@ func TestPrintWithCursorColor(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Test print with cursor and color state
 	err := L.DoString(`
@@ -188,7 +188,7 @@ func TestPrintWithNewlines(t *testing.T) {
 
 	RegisterWithState(L, r, func(i int) (rgba [4]uint8) {
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
 
 	// Test print with newlines (cursor should advance properly)
 	err := L.DoString(`

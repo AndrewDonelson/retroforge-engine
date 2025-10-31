@@ -26,7 +26,7 @@ func TestRegister(t *testing.T) {
 		_ = name // not implemented yet
 	}
 
-	Register(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Verify rf table exists
 	rf := L.GetGlobal("rf")
@@ -63,7 +63,7 @@ func TestClearFunction(t *testing.T) {
 			return [4]uint8{255, 128, 64, 255}
 		}
 		return [4]uint8{0, 0, 0, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Call rf.clear_i(1) - uses palette index
 	err := L.DoString(`rf.clear_i(1)`)
@@ -91,7 +91,7 @@ func TestClearIFunction(t *testing.T) {
 		}
 		return [4]uint8{0, 0, 0, 255}
 	}
-	Register(L, r, colorByIndex, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, colorByIndex, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Call rf.clear_i(1)
 	err := L.DoString(`rf.clear_i(1)`)
@@ -115,7 +115,7 @@ func TestInputFunctions(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(10, 10)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test btn (should return boolean)
 	err := L.DoString(`local result = rf.btn(0); if type(result) ~= "boolean" then error("btn should return boolean") end`)
@@ -135,7 +135,7 @@ func TestPrintFunctions(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test print with cursor/color state
 	err := L.DoString(`rf.cursor(10, 20); rf.color(5); rf.print("HELLO")`)
@@ -161,7 +161,7 @@ func TestLuaInvalidParameters(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test clear_i with wrong number of args
 	err := L.DoString(`rf.clear_i()`) // missing args
@@ -220,7 +220,7 @@ func TestLuaEdgeCases(t *testing.T) {
 			return [4]uint8{0, 0, 0, 255}
 		}
 		return [4]uint8{255, 255, 255, 255}
-	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	}, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test with nil/empty values
 	err := L.DoString(`rf.print_xy(0, 0, "", 0)`) // empty string
@@ -283,7 +283,7 @@ func TestLuaInvalidFunctions(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test calling non-existent function
 	err := L.DoString(`rf.nonexistent()`)
@@ -303,7 +303,7 @@ func TestLuaMusicEdgeCases(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test music with empty table
 	err := L.DoString(`rf.music({}, 120, 0.3)`)
@@ -351,7 +351,7 @@ func TestLuaAudioEdgeCases(t *testing.T) {
 	defer L.Close()
 
 	r := rendersoft.New(100, 100)
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Test sfx with invalid name
 	err := L.DoString(`rf.sfx("nonexistent")`)
@@ -410,7 +410,7 @@ func TestLuaNilColorByIndex(t *testing.T) {
 		return [4]uint8{0, 0, 0, 0} // zero alpha
 	}
 
-	Register(L, r, colorByIndex, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, colorByIndex, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// Should work even with zero alpha
 	err := L.DoString(`rf.clear_i(0)`)
@@ -426,7 +426,7 @@ func TestLuaNilSetPalette(t *testing.T) {
 	r := rendersoft.New(100, 100)
 
 	// Test with nil setPalette
-	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil)
+	Register(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil)
 
 	// palette_set should work even if setPalette is nil
 	err := L.DoString(`rf.palette_set("default")`)
@@ -446,7 +446,7 @@ func TestRegisterWithDev(t *testing.T) {
 	// Create a mock dev mode handler
 	mockDevMode := &mockDevModeHandler{enabled: true}
 
-	RegisterWithDev(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, mockDevMode)
+	RegisterWithDev(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, mockDevMode, nil)
 
 	// Verify rf table exists
 	rf := L.GetGlobal("rf")

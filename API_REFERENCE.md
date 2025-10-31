@@ -234,3 +234,104 @@ retroforge --folder examples/helloworld --window
 ```
 When running from a folder, files are automatically reloaded when modified.
 
+## Multiplayer API
+
+RetroForge supports multiplayer games with up to 6 players via WebRTC networking. The engine handles all networking automatically - you just need to register tables for synchronization and check if you're the host.
+
+### Connection Information
+
+- `rf.is_multiplayer()` - Returns `true` if game is in multiplayer mode, `false` for solo play
+- `rf.player_count()` - Returns total number of connected players (1-6). Always >= 1 (includes local player)
+- `rf.my_player_id()` - Returns the local player's ID (1-6). Host is always player_id = 1
+- `rf.is_host()` - Returns `true` if local player is the host. Only host runs game logic in `_update()`
+
+### State Synchronization
+
+- `rf.network_sync(table, tier)` - Register a Lua table for automatic synchronization
+  - `table`: Lua table to synchronize (e.g., `players`, `score`)
+  - `tier`: Synchronization frequency - `"fast"` (30-60/sec), `"moderate"` (15/sec), or `"slow"` (5/sec)
+  - Example: `rf.network_sync(players, "fast")` - Sync player positions smoothly
+  - Example: `rf.network_sync(score, "slow")` - Sync score updates less frequently
+  - Only host can modify tables that aren't keyed by player_id
+  - Tables keyed by player_id: only that player can modify their entry
+
+- `rf.network_unsync(table)` - Unregister a table from synchronization
+  - Stops syncing the table
+  - Useful for cleanup or dynamic objects
+
+### Input Handling (Host Only)
+
+- `rf.btn(player_id, button)` - Check another player's button state (host only)
+  - `player_id`: 1-6
+  - `button`: 0-15 (button index)
+  - Returns `true` if that player is pressing the button
+  - Only works in host's code
+  - Non-hosts use normal `rf.btn(button)` for local player
+
+**Example:**
+```lua
+function _update()
+  if rf.is_host() then
+    -- Host can check all players' inputs
+    for id = 1, rf.player_count() do
+      if rf.btn(id, 0) then  -- Check if Player id is pressing left
+        players[id].vx = -2
+      end
+    end
+  else
+    -- Non-host: just use normal input
+    if rf.btn(0) then
+      -- Local input handling (if needed)
+    end
+  end
+end
+```
+
+### Multiplayer Example
+
+```lua
+-- Simple multiplayer platformer
+players = {}
+score = {}
+
+function _init()
+  local player_count = rf.is_multiplayer() and rf.player_count() or 1
+  
+  -- Create player for each connected player
+  for i = 1, player_count do
+    players[i] = {x = 100*i, y = 100, vx = 0, vy = 0}
+    score[i] = 0
+  end
+  
+  -- Register for sync (multiplayer only)
+  if rf.is_multiplayer() then
+    rf.network_sync(players, "fast")   -- Smooth movement
+    rf.network_sync(score, "slow")     -- Less frequent updates
+  end
+end
+
+function _update()
+  if rf.is_multiplayer() and rf.is_host() then
+    -- Host runs game logic
+    for id = 1, rf.player_count() do
+      if rf.btn(id, 0) then players[id].vx = -3 end
+      if rf.btn(id, 1) then players[id].vx = 3 end
+      players[id].x = players[id].x + players[id].vx
+    end
+    -- Engine automatically syncs players table!
+  else
+    -- Solo mode or non-host (engine handles input sync automatically)
+  end
+end
+
+function _draw()
+  rf.clear_i(0)
+  for id, p in pairs(players) do
+    rf.rectfill(p.x, p.y, p.x+16, p.y+16, 7)
+    rf.print("P" .. id, p.x, p.y-10, 7)
+  end
+end
+```
+
+**Note:** Multiplayer functionality requires WebRTC connections which are established through the RetroForge webapp platform. See `RetroForge.V2.md` for complete multiplayer architecture details.
+
