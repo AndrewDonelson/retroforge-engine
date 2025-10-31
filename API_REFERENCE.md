@@ -143,6 +143,162 @@ Set active palette by name (e.g., `"RetroForge 50"`, `"Grayscale 50"`).
 ### `rf.quit()`
 Request application quit.
 
+## State Machine API
+
+The state machine provides a flexible system for managing game flow through different states (menus, playing, pause screens, etc.). Use `game.*` functions to register and manage states.
+
+### State Registration
+
+#### `game.registerState(name, stateTable)`
+Registers a new state with the state machine.
+
+**Parameters:**
+- `name` (string): Unique name for the state
+- `stateTable` (table): Table containing state lifecycle callbacks:
+  - `initialize(sm)` (optional): Called once when state is first created
+  - `enter(sm)` (optional): Called every time state becomes active
+  - `handleInput(sm)` (optional): Called each frame for input processing
+  - `update(dt)` (optional): Called each frame for game logic (dt is delta time in seconds)
+  - `draw()` (optional): Called each frame for rendering
+  - `exit(sm)` (optional): Called when leaving the state
+  - `shutdown()` (optional): Called once when state is destroyed
+
+**Example:**
+```lua
+local MenuState = {
+  selectedOption = 1,
+  
+  initialize = function(sm)
+    -- Load assets, allocate resources (called once)
+  end,
+  
+  enter = function(sm)
+    selectedOption = 1
+    -- Reset variables, start music (called every time state becomes active)
+  end,
+  
+  handleInput = function(sm)
+    if rf.btnp(2) then -- Up
+      selectedOption = math.max(1, selectedOption - 1)
+    elseif rf.btnp(3) then -- Down
+      selectedOption = math.min(3, selectedOption + 1)
+    elseif rf.btnp(4) then -- A button
+      if selectedOption == 1 then
+        game.changeState("playing")
+      end
+    end
+  end,
+  
+  update = function(dt)
+    -- Animate menu items
+  end,
+  
+  draw = function()
+    rf.clear_i(0)
+    rf.print("MENU", 100, 50, 7)
+    -- Draw menu options
+  end,
+  
+  exit = function(sm)
+    -- Pause music, save temporary data
+  end,
+  
+  shutdown = function()
+    -- Free assets (called once when state is destroyed)
+  end
+}
+
+game.registerState("menu", MenuState)
+```
+
+#### `game.unregisterState(name)`
+Removes a state from the registry. Cannot unregister states that are currently in the stack.
+
+### State Transitions
+
+#### `game.changeState(name)`
+Replaces all states in the stack with a new state. Use for complete transitions (e.g., menu → playing).
+
+#### `game.pushState(name)`
+Adds a new state on top of the current stack. Previous state pauses but stays in memory. Use for overlays (e.g., playing → pause menu).
+
+#### `game.popState()`
+Removes the top state from the stack and returns to the previous state. Use to close overlays (e.g., close pause menu → resume playing).
+
+#### `game.popAllStates()`
+Removes all states from the stack.
+
+### Shared Context
+
+States can share data through a persistent context that survives state transitions.
+
+#### `game.setContext(key, value)`
+Stores a value in the shared context. Value can be string, number, boolean, or table.
+
+#### `game.getContext(key)`
+Retrieves a value from the shared context. Returns `nil` if key doesn't exist.
+
+#### `game.hasContext(key)`
+Returns `true` if the key exists in context, `false` otherwise.
+
+#### `game.clearContext(key)`
+Removes a specific key from the context.
+
+#### `game.clearAllContext()`
+Clears all context data.
+
+**Example:**
+```lua
+-- In level select state
+game.setContext("current_level", 3)
+game.setContext("difficulty", "hard")
+game.changeState("playing")
+
+-- In playing state
+local level = game.getContext("current_level") or 1
+local difficulty = game.getContext("difficulty") or "normal"
+```
+
+### Credits API
+
+#### `game.addCredit(category, name, role)`
+Adds a credit entry to be displayed in the credits state. Categories: "Developer", "Artist", "Sound", "Music", "Special Thanks", etc.
+
+**Example:**
+```lua
+game.addCredit("Developer", "Jane Doe", "Lead Developer")
+game.addCredit("Artist", "John Smith", "Character Artist")
+```
+
+### Control
+
+#### `game.exit()`
+Transitions to credits state, then exits the game. Credits state will display all added credits before exit.
+
+### Utility
+
+#### `game.drawPreviousState()`
+Draws the state underneath the current state in the stack. Useful for overlays (e.g., pause menu showing dimmed game behind it).
+
+#### `game.getStackDepth()`
+Returns the number of states currently in the stack.
+
+**Example - Pause Menu Overlay:**
+```lua
+local PauseState = {
+  draw = function()
+    -- Draw the previous state (dimmed game)
+    game.drawPreviousState()
+    
+    -- Draw semi-transparent overlay
+    rf.rectfill(0, 0, 480, 270, 0) -- Assuming color 0 with alpha
+    
+    -- Draw pause menu
+    rf.print("PAUSED", 200, 100, 7)
+  end
+}
+```
+
 ## Helper Functions
 
 PICO-8-style utility functions for common operations.

@@ -138,6 +138,13 @@ make run-dev FOLDER=examples/moon-lander
 - **64KB cart storage**: Persistent storage (2x PICO-8's 32KB)
 - **Cart persistence**: Save/load game state with `cstore()`/`reload()`
 
+### State Machine (NEW!)
+- **Flexible state management**: Register states with lifecycle callbacks
+- **State stacking**: Push/pop states for overlays (pause menus, inventory)
+- **Shared context**: Pass data between states without tight coupling
+- **Built-in states**: Engine splash (debug-skippable) and credits screens
+- **Complete lifecycle**: Initialize, Enter, HandleInput, Update, Draw, Exit, Shutdown
+
 ### Multiplayer (NEW!)
 - **Up to 6 players** via WebRTC networking
 - **Automatic synchronization**: Register tables for sync with 3-tier system
