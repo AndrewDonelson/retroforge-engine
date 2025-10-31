@@ -348,6 +348,15 @@ func (nm *NetworkManager) ProcessReceivedInput(packet InputPacket) {
 
 // UpdateFrame increments frame counter and processes synchronization
 func (nm *NetworkManager) UpdateFrame(dt time.Duration) {
+	// Fast path: completely skip all work if not in multiplayer mode
+	nm.mu.RLock()
+	isMultiplayer := nm.isMultiplayer
+	nm.mu.RUnlock()
+
+	if !isMultiplayer {
+		return // Skip all work in solo mode for maximum performance
+	}
+
 	nm.mu.Lock()
 	nm.frame++
 	frame := nm.frame
@@ -362,7 +371,7 @@ func (nm *NetworkManager) UpdateFrame(dt time.Duration) {
 	}
 	nm.mu.Unlock()
 
-	if !nm.isMultiplayer || !isHost {
+	if !isHost {
 		return // Only host syncs state
 	}
 
