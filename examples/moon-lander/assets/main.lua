@@ -164,9 +164,11 @@ local function update_play(dt)
   if ship.y >= (ground_here - ship.size) then
     ship.y = ground_here - ship.size
     local speed = math.sqrt(ship.vx*ship.vx + ship.vy*ship.vy)
+    local vy_abs = math.abs(ship.vy)
     local angle_ok = math.abs(ship.angle) < 0.2
     local on_pad = ship.x >= pad_x0 and ship.x <= pad_x1
-    if speed < (land_speed or 18) and angle_ok and on_pad then
+    -- Check vertical velocity separately and use a stricter threshold
+    if vy_abs < (land_speed or 18) * 0.6 and speed < (land_speed or 18) and angle_ok and on_pad then
       ship.landed = true; score = score + math.floor(100 + (ship.fuel*2) + math.max(0, (land_speed - speed)*5))
       countdown = 3.0; best_level = math.max(best_level, level); best_score = math.max(best_score, score)
       rf.sfx("land"); set_level(level+1)

@@ -37,6 +37,8 @@ wasm_exec.js
 
 # Packs and bundles (generated)
 *.rfbundle
+# Note: cmd/cartbundle/cart.rf is kept as a placeholder for embed directive
+# It gets overwritten during bundle builds but should remain in git
 
 # Logs
 npm-debug.log*

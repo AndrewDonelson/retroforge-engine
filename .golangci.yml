@@ -1,0 +1,16 @@
+# GolangCI-Lint configuration
+# Suppress embed pattern errors for cartbundle (false positive from language server)
+
+linters-settings:
+  goanalysis:
+    # Skip directories with embed patterns that cause false positives
+    skip-dirs:
+      - cmd/cartbundle
+
+run:
+  # Don't fail on these specific errors
+  issues:
+    exclude-rules:
+      - path: cmd/cartbundle
+        text: "pattern.*no matching files found"
+
