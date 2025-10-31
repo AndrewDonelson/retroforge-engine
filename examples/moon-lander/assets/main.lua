@@ -7,14 +7,14 @@ local pad_y = ground_y-2
 local ship = {
   x=240, y=60, vx=0, vy=0,
   angle=0, -- radians
-  fuel=150,
+  fuel=100,
   size=6,
   alive=true, landed=false
 }
 
 -- Level-scaled parameters (initialized by set_level)
 local G = 1.0          -- gravity px/s^2
-local THRUST = 8.0     -- thrust accel px/s^2
+local THRUST = 4.0     -- thrust accel px/s^2
 local ROT = 2.0        -- rad/s
 
 local countdown = 5.0
@@ -37,7 +37,7 @@ for i=1,50 do
   local rough = (i-1)/49 -- 0..1
   t.padw = 80 - math.floor(rough*60) -- 80..20
   t.G = 0.25 + 0.75*rough
-  t.THRUST = 3.0 + 13.0*rough
+  t.THRUST = 2.0 + 6.0*rough  -- reduced from 3.0 + 13.0*rough (half strength)
   t.ROT = 2.0
   t.land_speed = 12 + math.floor(rough*16)
   t.seed = i*413
@@ -83,6 +83,21 @@ local function set_level(idx)
   ship.x, ship.y, ship.vx, ship.vy, ship.angle = 240, 60, 0, 0, 0
   ship.fuel, ship.alive, ship.landed = 150, true, false
   countdown = 5.0
+  
+  -- Generate stars (random count 40-80 based on level seed)
+  stars = {}
+  local starSeed = L.seed * 17
+  local function starRnd() starSeed = (1103515245*starSeed + 12345) % 2147483648; return starSeed end
+  local function starFrand(a,b) return a + (starRnd() % 10000)/10000*(b-a) end
+  local numStars = math.floor(starFrand(40, 81)) -- 40 to 80 inclusive
+  for i=1,numStars do
+    stars[i] = {
+      x = math.floor(starFrand(0, 480)),
+      y = math.floor(starFrand(10, 200)),
+      phase = starFrand(0, TWO_PI),
+      speed = starFrand(0.5, 2.0)
+    }
+  end
 end
 
 local function clamp(v, a, b) if v<a then return a elseif v>b then return b else return v end end
@@ -187,6 +202,15 @@ function _UPDATE(dt)
   update_play(dt)
 end
 
+local function draw_stars()
+  for i=1,#stars do
+    local s = stars[i]
+    local brightness = math.floor(128 + 127 * math.sin(time_s * s.speed + s.phase))
+    brightness = math.max(128, math.min(255, brightness))
+    rf.pset(s.x, s.y, 1) -- use white color index
+  end
+end
+
 local function draw_ship()
   local s = ship.size
   local sin, cos = math.sin(ship.angle), math.cos(ship.angle)
@@ -202,7 +226,7 @@ end
 function _DRAW()
   rf.clear_i(0)
   if state == "menu" then draw_menu(); return end
-  draw_hud(); draw_level(); draw_ship(); draw_messages()
+  draw_stars(); draw_hud(); draw_level(); draw_ship(); draw_messages()
 end
 
 function draw_menu()
