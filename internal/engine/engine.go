@@ -246,7 +246,25 @@ func (e *Engine) LoadCartFromReader(r io.ReaderAt, size int64) error {
 	}
 	luabind.RegisterModuleImportWithMap(e.VM.L, e.GSM, fileMap)
 
-	return e.LoadLuaSource(string(src))
+	if err := e.LoadLuaSource(string(src)); err != nil {
+		return err
+	}
+
+	// Start the state machine after loading Lua (for cart files, not in debug mode)
+	// This will show the splash screen, then transition to the initial state set by the game
+	// Default to "menu" if no initial state is set by the game
+	if e.GSM != nil {
+		initialState := "menu" // Default initial state
+		if startErr := e.GSM.Start(initialState); startErr != nil {
+			// If Start fails (e.g., no initial state), that's ok - game might not use state machine
+			// But log it if we're in dev mode
+			if e.devMode != nil {
+				e.devMode.AddDebugLog(fmt.Sprintf("State machine start warning: %v", startErr))
+			}
+		}
+	}
+
+	return nil
 }
 
 // LoadCartFile opens .rfs by path and loads it.

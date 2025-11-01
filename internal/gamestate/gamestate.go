@@ -200,6 +200,10 @@ func (ess *EngineSplashState) Draw() {
 		return
 	}
 
+	// Reset camera and clipping to ensure clean drawing
+	ess.gsm.renderer.SetCamera(0, 0)
+	ess.gsm.renderer.SetClip(0, 0, 0, 0) // Disable clipping
+
 	// Clear screen (dark blue/black)
 	col := ess.gsm.palette.Color(1)
 	ess.gsm.renderer.Clear(color.RGBA{R: col.R, G: col.G, B: col.B, A: col.A})
@@ -307,6 +311,10 @@ func (cs *CreditsState) Draw() {
 	if cs.gsm.renderer == nil {
 		return
 	}
+
+	// Reset camera and clipping to ensure clean drawing
+	cs.gsm.renderer.SetCamera(0, 0)
+	cs.gsm.renderer.SetClip(0, 0, 0, 0) // Disable clipping
 
 	// Clear screen (dark blue/black)
 	col := cs.gsm.palette.Color(1)

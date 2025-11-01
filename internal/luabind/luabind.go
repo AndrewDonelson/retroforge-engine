@@ -1492,6 +1492,19 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 			return 0
 		}))
 
+		// rf.physics_body_set_gravity_scale(bodyId, scale) - Set gravity scale (0 = no gravity, 1 = normal)
+		L.SetField(rf, "physics_body_set_gravity_scale", L.NewFunction(func(L *lua.LState) int {
+			bodyId := L.CheckInt(1)
+			scale := float64(L.CheckNumber(2))
+
+			body, ok := physicsBodies[bodyId]
+			if !ok {
+				return 0
+			}
+			body.SetGravityScale(scale)
+			return 0
+		}))
+
 		L.SetField(rf, "physics_body_get_velocity", L.NewFunction(func(L *lua.LState) int {
 			bodyId := L.CheckInt(1)
 

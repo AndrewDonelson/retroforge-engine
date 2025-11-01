@@ -1,0 +1,11 @@
+{
+  "title": "Galaxy Simulation",
+  "author": "RetroForge",
+  "description": "A physics-based spiral galaxy simulation with 2048 stars orbiting a central gravitational point.",
+  "genre": "Simulation",
+  "tags": ["example", "simulation", "physics", "galaxy"],
+  "entry": "main.lua",
+  "palette": "PICO-8",
+  "scale": 1
+}
+
