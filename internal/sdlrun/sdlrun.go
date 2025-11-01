@@ -50,6 +50,10 @@ func RunWindow(e *engine.Engine, scale int) error {
 	_ = audio.Init()
 	running := true
 	for running {
+		// Step input state BEFORE polling events (prev = cur, then we update cur)
+		// This ensures btnp() works correctly by comparing current vs previous state
+		input.Step()
+
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch ev := event.(type) {
 			case *sdl.QuitEvent:
@@ -81,9 +85,8 @@ func RunWindow(e *engine.Engine, scale int) error {
 			}
 		}
 
-		// Run one frame, then advance input state so btnp works next frame
+		// Run one frame (now input state is correct: prev has old state, cur has new state)
 		e.RunFrames(1)
-		input.Step()
 		if app.QuitRequested() {
 			running = false
 		}

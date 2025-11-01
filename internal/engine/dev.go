@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
+	"github.com/AndrewDonelson/retroforge-engine/internal/gamestate"
 	"github.com/AndrewDonelson/retroforge-engine/internal/lua"
+	"github.com/AndrewDonelson/retroforge-engine/internal/luabind"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -198,6 +200,10 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 		return fmt.Errorf("failed to enable dev mode: %w", err)
 	}
 
+	// Update GSM to debug mode (skip splash screen)
+	// Note: renderer and palette will be set in registerLuaBindings
+	e.GSM = gamestate.NewGameStateMachine(true, "RetroForge", "1.0.0", "RetroForge Team", nil, nil)
+
 	// Read manifest.json
 	manifestPath := filepath.Join(cartPath, "manifest.json")
 	mfBytes, err := os.ReadFile(manifestPath)
@@ -243,8 +249,31 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 		json.Unmarshal(b, &e.spritesMap)
 	}
 
+	// Register Lua bindings first (creates rf table)
+	e.registerLuaBindings()
+
+	// Register module import with filesystem (dev mode) - rf table now exists
+	assetsPath := filepath.Join(cartPath, "assets")
+	luabind.RegisterModuleImportWithFilesystem(e.VM.L, e.GSM, assetsPath)
+
 	start := time.Now()
 	err = e.LoadLuaSource(string(src))
+	if err == nil {
+		// Start the state machine (shows splash in release, goes to initial state in debug)
+		// In debug mode, try to find a menu state or start with first registered state
+		initialState := ""
+		if e.devMode != nil && e.devMode.IsEnabled() {
+			// Debug mode: try to find menu state or use first registered state
+			initialState = "menu" // Default to menu in debug
+		}
+		if startErr := e.GSM.Start(initialState); startErr != nil {
+			// If Start fails (e.g., no initial state), continue anyway
+			// State machine will be empty but that's ok for now
+			if e.devMode != nil {
+				e.devMode.AddDebugLog(fmt.Sprintf("State machine start warning: %v", startErr))
+			}
+		}
+	}
 	loadTime := time.Since(start)
 
 	if e.devMode != nil {
@@ -271,6 +300,12 @@ func (e *Engine) ReloadCart() error {
 	}
 
 	e.devMode.AddDebugLog("Reloading cart...")
+
+	// Clear all module-based states before reloading (preserve built-in states)
+	// This prevents old Lua callbacks from referencing closed VM
+	if e.GSM != nil {
+		e.clearModuleStates()
+	}
 
 	// Close current VM and create new one
 	e.VM.Close()
@@ -319,8 +354,24 @@ func (e *Engine) ReloadCart() error {
 		json.Unmarshal(b, &e.spritesMap)
 	}
 
+	// Register Lua bindings first (creates rf table)
+	e.registerLuaBindings()
+
+	// Register module import with filesystem (dev mode) - rf table now exists
+	assetsPath := filepath.Join(cartPath, "assets")
+	luabind.RegisterModuleImportWithFilesystem(e.VM.L, e.GSM, assetsPath)
+
 	start := time.Now()
 	err = e.LoadLuaSource(string(src))
+	if err == nil {
+		// Start the state machine after reload
+		initialState := "menu" // Default to menu in debug
+		if startErr := e.GSM.Start(initialState); startErr != nil {
+			if e.devMode != nil {
+				e.devMode.AddDebugLog(fmt.Sprintf("State machine start warning: %v", startErr))
+			}
+		}
+	}
 	loadTime := time.Since(start)
 
 	e.devMode.stats.LoadTime = loadTime
@@ -331,4 +382,39 @@ func (e *Engine) ReloadCart() error {
 
 	e.devMode.AddDebugLog(fmt.Sprintf("Reloaded successfully (took %v)", loadTime))
 	return nil
+}
+
+// clearModuleStates removes all module-based states (those imported via rf.import)
+// but preserves built-in states (splash, credits)
+func (e *Engine) clearModuleStates() {
+	if e.GSM == nil || e.VM == nil {
+		return
+	}
+
+	// First, pop all states from stack so we can unregister them
+	e.GSM.PopAllStates()
+
+	// Get module loader for the old VM (before it's closed)
+	// Use e.VM.L to get the underlying LState
+	loader := luabind.GetModuleLoader(e.VM.L)
+	if loader != nil {
+		// Get all loaded module names from the loader
+		loadedModules := loader.GetLoadedModules()
+		for _, name := range loadedModules {
+			// Unregister each module state
+			// Ignore errors - state might already be gone
+			_ = e.GSM.UnregisterState(name)
+		}
+	} else {
+		// Fallback: try common module state names
+		moduleNames := []string{"menu", "play", "play_state"}
+		for _, name := range moduleNames {
+			if e.GSM.IsStateRegistered(name) {
+				_ = e.GSM.UnregisterState(name)
+			}
+		}
+	}
+
+	// Also unregister the old module loader from the map
+	luabind.UnregisterModuleLoader(e.VM.L)
 }

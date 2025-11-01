@@ -71,6 +71,14 @@ func (ls *LuaState) HandleInput(sm *StateMachine) {
 // Update calls the Lua update callback
 func (ls *LuaState) Update(dt float64) {
 	if ls.callbacks.Update != nil {
+		// Use a defer/recover to catch any panics from Update callbacks
+		defer func() {
+			if r := recover(); r != nil {
+				// Panic in Update - log but don't crash
+				// State machine should continue running
+				_ = r // Silently recover - game should keep running
+			}
+		}()
 		ls.callbacks.Update(dt)
 	}
 }
@@ -108,6 +116,12 @@ type StateMachine struct {
 
 	// Optional: hook for drawing previous state
 	drawPreviousStateHook func()
+
+	// Pending state changes (to avoid deadlocks when called from HandleInput/Update/Draw)
+	pendingChangeState string // Queue a ChangeState operation
+	pendingPushState   string // Queue a PushState operation
+	pendingPopState    bool   // Queue a PopState operation
+	inCallback         bool   // Flag to detect if we're in a callback (HandleInput/Update/Draw)
 }
 
 // NewStateMachine creates a new generic state machine
@@ -189,31 +203,60 @@ func (sm *StateMachine) UnregisterState(name string) error {
 
 // ChangeState replaces all states in the stack with a new state
 func (sm *StateMachine) ChangeState(name string) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	sm.mu.RLock()
+	inCallback := sm.inCallback
+	sm.mu.RUnlock()
 
+	// If called from within HandleInput/Update/Draw, queue it
+	if inCallback {
+		sm.mu.Lock()
+		sm.pendingChangeState = name
+		sm.pendingPushState = ""
+		sm.pendingPopState = false
+		sm.mu.Unlock()
+		return nil
+	}
+
+	// Otherwise execute immediately
+	return sm.doChangeState(name)
+}
+
+// doChangeState performs the actual state change (must be called without locks or with write lock)
+func (sm *StateMachine) doChangeState(name string) error {
+	sm.mu.Lock()
 	state, exists := sm.stateRegistry[name]
 	if !exists {
+		sm.mu.Unlock()
 		return fmt.Errorf("state '%s' is not registered", name)
 	}
 
-	// Exit and remove all states from stack
-	for len(sm.stateStack) > 0 {
-		top := sm.stateStack[len(sm.stateStack)-1]
+	// Collect states to exit (while holding lock)
+	statesToExit := make([]State, len(sm.stateStack))
+	copy(statesToExit, sm.stateStack)
+	sm.stateStack = sm.stateStack[:0] // Clear stack
+	sm.mu.Unlock()
+
+	// Exit all states (outside lock to avoid deadlock)
+	for _, top := range statesToExit {
 		top.Exit(sm)
-		sm.stateStack = sm.stateStack[:len(sm.stateStack)-1]
 	}
 
+	sm.mu.Lock()
 	// Initialize if first time
 	if !sm.initialized[name] {
+		sm.mu.Unlock()
 		if err := state.Initialize(sm); err != nil {
 			return fmt.Errorf("failed to initialize state '%s': %w", name, err)
 		}
+		sm.mu.Lock()
 		sm.initialized[name] = true
 	}
 
-	// Add to stack and enter
+	// Add to stack
 	sm.stateStack = append(sm.stateStack, state)
+	sm.mu.Unlock()
+
+	// Enter state (outside lock to avoid deadlock)
 	state.Enter(sm)
 
 	return nil
@@ -221,30 +264,60 @@ func (sm *StateMachine) ChangeState(name string) error {
 
 // PushState adds a new state on top of the stack
 func (sm *StateMachine) PushState(name string) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	sm.mu.RLock()
+	inCallback := sm.inCallback
+	sm.mu.RUnlock()
 
+	// If called from within HandleInput/Update/Draw, queue it
+	if inCallback {
+		sm.mu.Lock()
+		sm.pendingPushState = name
+		sm.pendingChangeState = ""
+		sm.pendingPopState = false
+		sm.mu.Unlock()
+		return nil
+	}
+
+	// Otherwise execute immediately
+	return sm.doPushState(name)
+}
+
+// doPushState performs the actual push (must be called without locks or with write lock)
+func (sm *StateMachine) doPushState(name string) error {
+	sm.mu.Lock()
 	state, exists := sm.stateRegistry[name]
 	if !exists {
+		sm.mu.Unlock()
 		return fmt.Errorf("state '%s' is not registered", name)
 	}
 
-	// Exit current top state (but keep on stack)
+	var topToExit State
 	if len(sm.stateStack) > 0 {
-		top := sm.stateStack[len(sm.stateStack)-1]
-		top.Exit(sm)
+		topToExit = sm.stateStack[len(sm.stateStack)-1]
+	}
+	sm.mu.Unlock()
+
+	// Exit current top state (but keep on stack) - outside lock to avoid deadlock
+	if topToExit != nil {
+		topToExit.Exit(sm)
 	}
 
+	sm.mu.Lock()
 	// Initialize if first time
 	if !sm.initialized[name] {
+		sm.mu.Unlock()
 		if err := state.Initialize(sm); err != nil {
 			return fmt.Errorf("failed to initialize state '%s': %w", name, err)
 		}
+		sm.mu.Lock()
 		sm.initialized[name] = true
 	}
 
-	// Add to stack and enter
+	// Add to stack
 	sm.stateStack = append(sm.stateStack, state)
+	sm.mu.Unlock()
+
+	// Enter state (outside lock to avoid deadlock)
 	state.Enter(sm)
 
 	return nil
@@ -252,21 +325,46 @@ func (sm *StateMachine) PushState(name string) error {
 
 // PopState removes the top state from the stack
 func (sm *StateMachine) PopState() error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	sm.mu.RLock()
+	inCallback := sm.inCallback
+	sm.mu.RUnlock()
 
+	// If called from within HandleInput/Update/Draw, queue it
+	if inCallback {
+		sm.mu.Lock()
+		sm.pendingPopState = true
+		sm.pendingChangeState = ""
+		sm.pendingPushState = ""
+		sm.mu.Unlock()
+		return nil
+	}
+
+	// Otherwise execute immediately
+	return sm.doPopState()
+}
+
+// doPopState performs the actual pop (must be called without locks or with write lock)
+func (sm *StateMachine) doPopState() error {
+	sm.mu.Lock()
 	if len(sm.stateStack) == 0 {
+		sm.mu.Unlock()
 		return fmt.Errorf("cannot pop state from empty stack")
 	}
 
-	// Exit and remove top state
+	// Get states (while holding lock)
 	top := sm.stateStack[len(sm.stateStack)-1]
-	top.Exit(sm)
 	sm.stateStack = sm.stateStack[:len(sm.stateStack)-1]
-
-	// Re-enter previous state if any
+	var previous State
 	if len(sm.stateStack) > 0 {
-		previous := sm.stateStack[len(sm.stateStack)-1]
+		previous = sm.stateStack[len(sm.stateStack)-1]
+	}
+	sm.mu.Unlock()
+
+	// Exit top state (outside lock to avoid deadlock)
+	top.Exit(sm)
+
+	// Re-enter previous state if any (outside lock to avoid deadlock)
+	if previous != nil {
 		previous.Enter(sm)
 	}
 
@@ -287,35 +385,129 @@ func (sm *StateMachine) PopAllStates() {
 
 // HandleInput calls HandleInput on the top state
 func (sm *StateMachine) HandleInput() {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+	sm.mu.Lock()
+	sm.inCallback = true
+	sm.mu.Unlock()
 
+	sm.mu.RLock()
+	var top State
 	if len(sm.stateStack) > 0 {
-		top := sm.stateStack[len(sm.stateStack)-1]
+		top = sm.stateStack[len(sm.stateStack)-1]
+	}
+	sm.mu.RUnlock()
+
+	if top != nil {
 		top.HandleInput(sm)
 	}
+
+	sm.mu.Lock()
+	sm.inCallback = false
+	sm.mu.Unlock()
+	// Don't process state changes here - defer to Update() to avoid deadlocks
 }
 
 // Update calls Update on the top state
 func (sm *StateMachine) Update(dt float64) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+	// Process pending state changes FIRST (before calling Update on current state)
+	// This ensures state changes from previous frame are handled before the new state's Update runs
+	sm.mu.Lock()
+	pendingChange := sm.pendingChangeState != ""
+	pendingPush := sm.pendingPushState != ""
+	pendingPop := sm.pendingPopState
 
+	var changeStateName string
+	var pushStateName string
+
+	if pendingChange {
+		changeStateName = sm.pendingChangeState
+		sm.pendingChangeState = ""
+		sm.pendingPushState = ""
+		sm.pendingPopState = false
+	} else if pendingPush {
+		pushStateName = sm.pendingPushState
+		sm.pendingPushState = ""
+		sm.pendingChangeState = ""
+		sm.pendingPopState = false
+	} else if pendingPop {
+		sm.pendingPopState = false
+		sm.pendingChangeState = ""
+		sm.pendingPushState = ""
+	}
+	sm.mu.Unlock()
+
+	// Execute pending state changes outside lock to avoid deadlock
+	if pendingChange {
+		if err := sm.doChangeState(changeStateName); err != nil {
+			// State change failed - don't call Update this frame to avoid issues
+			sm.mu.Lock()
+			sm.inCallback = false
+			sm.mu.Unlock()
+			return
+		}
+		// After state change, the new state is now on top, so it will get Update called below
+	} else if pendingPush {
+		if err := sm.doPushState(pushStateName); err != nil {
+			// State push failed - don't call Update this frame
+			sm.mu.Lock()
+			sm.inCallback = false
+			sm.mu.Unlock()
+			return
+		}
+		// After push, the new state is now on top, so it will get Update called below
+	} else if pendingPop {
+		if err := sm.doPopState(); err != nil {
+			// State pop failed - don't call Update this frame
+			sm.mu.Lock()
+			sm.inCallback = false
+			sm.mu.Unlock()
+			return
+		}
+		// After pop, the previous state is now on top, so it will get Update called below
+	}
+
+	// Now call Update on the current top state (which may have just changed)
+	// Re-read the stack after state changes to ensure we have the latest state
+	sm.mu.Lock()
+	sm.inCallback = true
+	sm.mu.Unlock()
+
+	sm.mu.RLock()
+	var top State
 	if len(sm.stateStack) > 0 {
-		top := sm.stateStack[len(sm.stateStack)-1]
+		top = sm.stateStack[len(sm.stateStack)-1]
+	}
+	sm.mu.RUnlock()
+
+	if top != nil {
 		top.Update(dt)
 	}
+
+	sm.mu.Lock()
+	sm.inCallback = false
+	sm.mu.Unlock()
 }
 
 // Draw calls Draw on the top state
 func (sm *StateMachine) Draw() {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+	sm.mu.Lock()
+	sm.inCallback = true
+	sm.mu.Unlock()
 
+	sm.mu.RLock()
+	var top State
 	if len(sm.stateStack) > 0 {
-		top := sm.stateStack[len(sm.stateStack)-1]
+		top = sm.stateStack[len(sm.stateStack)-1]
+	}
+	sm.mu.RUnlock()
+
+	if top != nil {
 		top.Draw()
 	}
+
+	sm.mu.Lock()
+	sm.inCallback = false
+	sm.mu.Unlock()
+	// Don't process state changes here - defer to Update() to avoid deadlocks
 }
 
 // DrawPreviousState sets a hook function that will be called to draw the previous state

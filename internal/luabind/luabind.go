@@ -1,6 +1,7 @@
 package luabind
 
 import (
+	"fmt"
 	"image/color"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/AndrewDonelson/retroforge-engine/internal/input"
 	"github.com/AndrewDonelson/retroforge-engine/internal/network"
 	"github.com/AndrewDonelson/retroforge-engine/internal/physics"
+	"github.com/AndrewDonelson/retroforge-engine/internal/spritepool"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -59,6 +61,21 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 
 	// Store devMode in closure for debug functions
 	devModePtr := devMode
+
+	// Create pool manager for automatic sprite pooling
+	poolManager := spritepool.NewPoolManager()
+
+	// Register existing sprites that meet pooling criteria
+	for spriteName, spriteData := range spritesMap {
+		if spritepool.ShouldPool(spriteData) {
+			if err := poolManager.RegisterSprite(spriteName, spriteData); err != nil {
+				// Log error but don't fail - pooling is optional
+				if devMode != nil {
+					devMode.AddDebugLog(fmt.Sprintf("Failed to create pool for sprite '%s': %v", spriteName, err))
+				}
+			}
+		}
+	}
 
 	// Create wrapper for colorByIndex that applies remapping
 	colorByIndexRemapped := func(i int) (c [4]uint8) {
@@ -637,16 +654,23 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		return 0
 	}))
 
-	// Sprites: rf.sprite(name) returns table with width, height, pixels, useCollision, mountPoints
+	// Store spritesMap pointer for modification
+	// Maps are reference types in Go, so we can store the map directly
+	spriteMapPtr := &spritesMap
+
+	// Store pool manager for automatic pool registration
+	// This allows pools to be created/updated when sprite properties change
+
+	// Sprites: rf.sprite(name) returns table with width, height, pixels, useCollision, mountPoints, isUI, lifetime, maxSpawn
 	L.SetField(rf, "sprite", L.NewFunction(func(L *lua.LState) int {
 		name := L.CheckString(1)
-		sprite, ok := spritesMap[name]
+		sprite, ok := (*spriteMapPtr)[name]
 		if !ok {
 			L.Push(lua.LNil)
 			return 1
 		}
 
-		// Return table: {width=w, height=h, pixels={{row1}, {row2}, ...}, useCollision=bool, mountPoints={{x,y}, ...}}
+		// Return table: {width=w, height=h, pixels={{row1}, {row2}, ...}, useCollision=bool, mountPoints={{x,y}, ...}, isUI=bool, lifetime=int, maxSpawn=int}
 		tbl := L.NewTable()
 		tbl.RawSetString("width", lua.LNumber(sprite.Width))
 		tbl.RawSetString("height", lua.LNumber(sprite.Height))
@@ -661,6 +685,9 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		}
 		tbl.RawSetString("pixels", pixelsTbl)
 		tbl.RawSetString("useCollision", lua.LBool(sprite.UseCollision))
+		tbl.RawSetString("isUI", lua.LBool(sprite.IsUI))
+		tbl.RawSetString("lifetime", lua.LNumber(sprite.Lifetime))
+		tbl.RawSetString("maxSpawn", lua.LNumber(sprite.MaxSpawn))
 
 		mountPointsTbl := L.NewTable()
 		for i, mp := range sprite.MountPoints {
@@ -690,7 +717,7 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		flipX := L.OptBool(4, false)
 		flipY := L.OptBool(5, false)
 
-		sprite, ok := spritesMap[name]
+		sprite, ok := (*spriteMapPtr)[name]
 		if !ok {
 			return 0 // Sprite not found, do nothing
 		}
@@ -739,7 +766,7 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		flipX := L.OptBool(10, false)
 		flipY := L.OptBool(11, false)
 
-		sprite, ok := spritesMap[name]
+		sprite, ok := (*spriteMapPtr)[name]
 		if !ok {
 			return 0
 		}
@@ -775,6 +802,408 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 				}
 			}
 		}
+		return 0
+	}))
+
+	// Sprite creation: rf.newSprite(name, width, height) -> sprite table
+	// Creates a new empty sprite (all pixels transparent, defaults: isUI=true, lifetime=0, maxSpawn=0)
+	L.SetField(rf, "newSprite", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		width := L.CheckInt(2)
+		height := L.CheckInt(3)
+
+		if width <= 0 || height <= 0 {
+			L.RaiseError("sprite width and height must be positive")
+			return 0
+		}
+		if width > 256 || height > 256 {
+			L.RaiseError("sprite dimensions cannot exceed 256x256")
+			return 0
+		}
+
+		// Initialize pixels with all transparent (-1)
+		pixels := make([][]int, height)
+		for y := range pixels {
+			pixels[y] = make([]int, width)
+			for x := range pixels[y] {
+				pixels[y][x] = -1 // Transparent
+			}
+		}
+
+		// Create new sprite with defaults
+		newSprite := cartio.SpriteData{
+			Width:        width,
+			Height:       height,
+			Pixels:       pixels,
+			UseCollision: false,
+			MountPoints:  []cartio.MountPoint{},
+			IsUI:         true, // Default true
+			Lifetime:     0,    // 0 = no lifetime limit
+			MaxSpawn:     0,    // 0 = no spawn limit
+		}
+
+		// Add to sprite map
+		(*spriteMapPtr)[name] = newSprite
+
+		// Automatically register pool if sprite meets criteria (isUI=false, maxSpawn>10)
+		// Note: Default sprite has isUI=true and maxSpawn=0, so it won't be pooled by default
+		// Pool will be created automatically when properties are changed via setSpriteProperty
+
+		// Return sprite table
+		tbl := L.NewTable()
+		tbl.RawSetString("width", lua.LNumber(width))
+		tbl.RawSetString("height", lua.LNumber(height))
+
+		pixelsTbl := L.NewTable()
+		for y, row := range pixels {
+			rowTbl := L.NewTable()
+			for x, colorIdx := range row {
+				rowTbl.RawSetInt(x+1, lua.LNumber(colorIdx))
+			}
+			pixelsTbl.RawSetInt(y+1, rowTbl)
+		}
+		tbl.RawSetString("pixels", pixelsTbl)
+		tbl.RawSetString("useCollision", lua.LBool(false))
+		tbl.RawSetString("isUI", lua.LBool(true))
+		tbl.RawSetString("lifetime", lua.LNumber(0))
+		tbl.RawSetString("maxSpawn", lua.LNumber(0))
+		tbl.RawSetString("mountPoints", L.NewTable())
+
+		L.Push(tbl)
+		return 1
+	}))
+
+	// Helper functions for sprite drawing (defined before use)
+	abs := func(n int) int {
+		if n < 0 {
+			return -n
+		}
+		return n
+	}
+
+	// Helper to draw line in sprite
+	spriteLine := func(name string, x0, y0, x1, y1, idx int, sprite cartio.SpriteData, spriteMapPtr *cartio.SpriteMap) {
+		dx := abs(x1 - x0)
+		dy := abs(y1 - y0)
+		sx := 1
+		if x0 > x1 {
+			sx = -1
+		}
+		sy := 1
+		if y0 > y1 {
+			sy = -1
+		}
+		err := dx - dy
+
+		x, y := x0, y0
+		for {
+			if x >= 0 && x < sprite.Width && y >= 0 && y < sprite.Height {
+				sprite.Pixels[y][x] = idx
+			}
+
+			if x == x1 && y == y1 {
+				break
+			}
+
+			e2 := 2 * err
+			if e2 > -dy {
+				err -= dy
+				x += sx
+			}
+			if e2 < dx {
+				err += dx
+				y += sy
+			}
+		}
+		(*spriteMapPtr)[name] = sprite
+	}
+
+	// Helper to set pixel in sprite with bounds checking
+	setSpritePixel := func(name string, x, y, idx int, sprite cartio.SpriteData, spriteMapPtr *cartio.SpriteMap) {
+		if x >= 0 && x < sprite.Width && y >= 0 && y < sprite.Height {
+			sprite.Pixels[y][x] = idx
+			(*spriteMapPtr)[name] = sprite
+		}
+	}
+
+	// Sprite primitive drawing functions
+	// These draw to sprite pixels instead of the screen
+
+	// rf.sprite_pset(sprite_name, x, y, index) - Set pixel in sprite
+	L.SetField(rf, "sprite_pset", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		x := L.CheckInt(2)
+		y := L.CheckInt(3)
+		idx := L.CheckInt(4)
+
+		sprite, ok := (*spriteMapPtr)[name]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", name)
+			return 0
+		}
+
+		if x < 0 || y < 0 || x >= sprite.Width || y >= sprite.Height {
+			return 0 // Out of bounds, ignore
+		}
+
+		sprite.Pixels[y][x] = idx
+		(*spriteMapPtr)[name] = sprite
+		return 0
+	}))
+
+	// rf.sprite_line(sprite_name, x0, y0, x1, y1, index) - Draw line in sprite
+	L.SetField(rf, "sprite_line", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		x0 := L.CheckInt(2)
+		y0 := L.CheckInt(3)
+		x1 := L.CheckInt(4)
+		y1 := L.CheckInt(5)
+		idx := L.CheckInt(6)
+
+		sprite, ok := (*spriteMapPtr)[name]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", name)
+			return 0
+		}
+
+		// Bresenham's line algorithm
+		dx := abs(x1 - x0)
+		dy := abs(y1 - y0)
+		sx := 1
+		if x0 > x1 {
+			sx = -1
+		}
+		sy := 1
+		if y0 > y1 {
+			sy = -1
+		}
+		err := dx - dy
+
+		x, y := x0, y0
+		for {
+			if x >= 0 && x < sprite.Width && y >= 0 && y < sprite.Height {
+				sprite.Pixels[y][x] = idx
+			}
+
+			if x == x1 && y == y1 {
+				break
+			}
+
+			e2 := 2 * err
+			if e2 > -dy {
+				err -= dy
+				x += sx
+			}
+			if e2 < dx {
+				err += dx
+				y += sy
+			}
+		}
+
+		(*spriteMapPtr)[name] = sprite
+		return 0
+	}))
+
+	// rf.sprite_rect(sprite_name, x0, y0, x1, y1, index) - Draw rectangle outline in sprite
+	L.SetField(rf, "sprite_rect", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		x0 := L.CheckInt(2)
+		y0 := L.CheckInt(3)
+		x1 := L.CheckInt(4)
+		y1 := L.CheckInt(5)
+		idx := L.CheckInt(6)
+
+		sprite, ok := (*spriteMapPtr)[name]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", name)
+			return 0
+		}
+
+		// Draw four lines
+		spriteLine(name, x0, y0, x1, y0, idx, sprite, spriteMapPtr) // Top
+		spriteLine(name, x1, y0, x1, y1, idx, sprite, spriteMapPtr) // Right
+		spriteLine(name, x1, y1, x0, y1, idx, sprite, spriteMapPtr) // Bottom
+		spriteLine(name, x0, y1, x0, y0, idx, sprite, spriteMapPtr) // Left
+
+		return 0
+	}))
+
+	// rf.sprite_rectfill(sprite_name, x0, y0, x1, y1, index) - Draw filled rectangle in sprite
+	L.SetField(rf, "sprite_rectfill", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		x0 := L.CheckInt(2)
+		y0 := L.CheckInt(3)
+		x1 := L.CheckInt(4)
+		y1 := L.CheckInt(5)
+		idx := L.CheckInt(6)
+
+		sprite, ok := (*spriteMapPtr)[name]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", name)
+			return 0
+		}
+
+		// Ensure x0 < x1 and y0 < y1
+		if x0 > x1 {
+			x0, x1 = x1, x0
+		}
+		if y0 > y1 {
+			y0, y1 = y1, y0
+		}
+
+		// Fill rectangle
+		for y := y0; y <= y1; y++ {
+			if y >= 0 && y < sprite.Height {
+				for x := x0; x <= x1; x++ {
+					if x >= 0 && x < sprite.Width {
+						sprite.Pixels[y][x] = idx
+					}
+				}
+			}
+		}
+
+		(*spriteMapPtr)[name] = sprite
+		return 0
+	}))
+
+	// rf.sprite_circ(sprite_name, x, y, radius, index) - Draw circle outline in sprite
+	L.SetField(rf, "sprite_circ", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		x := L.CheckInt(2)
+		y := L.CheckInt(3)
+		radius := L.CheckInt(4)
+		idx := L.CheckInt(5)
+
+		sprite, ok := (*spriteMapPtr)[name]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", name)
+			return 0
+		}
+
+		// Midpoint circle algorithm
+		xx := radius
+		yy := 0
+		err := 0
+
+		for xx >= yy {
+			// Draw 8 points of symmetry
+			setSpritePixel(name, x+xx, y+yy, idx, sprite, spriteMapPtr)
+			setSpritePixel(name, x-xx, y+yy, idx, sprite, spriteMapPtr)
+			setSpritePixel(name, x+xx, y-yy, idx, sprite, spriteMapPtr)
+			setSpritePixel(name, x-xx, y-yy, idx, sprite, spriteMapPtr)
+			setSpritePixel(name, x+yy, y+xx, idx, sprite, spriteMapPtr)
+			setSpritePixel(name, x-yy, y+xx, idx, sprite, spriteMapPtr)
+			setSpritePixel(name, x+yy, y-xx, idx, sprite, spriteMapPtr)
+			setSpritePixel(name, x-yy, y-xx, idx, sprite, spriteMapPtr)
+
+			if err <= 0 {
+				yy++
+				err += 2*yy + 1
+			}
+			if err > 0 {
+				xx--
+				err -= 2*xx + 1
+			}
+		}
+
+		return 0
+	}))
+
+	// rf.sprite_circfill(sprite_name, x, y, radius, index) - Draw filled circle in sprite
+	L.SetField(rf, "sprite_circfill", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		x := L.CheckInt(2)
+		y := L.CheckInt(3)
+		radius := L.CheckInt(4)
+		idx := L.CheckInt(5)
+
+		sprite, ok := (*spriteMapPtr)[name]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", name)
+			return 0
+		}
+
+		// Fill circle by scanning and checking distance
+		for sy := -radius; sy <= radius; sy++ {
+			if y+sy >= 0 && y+sy < sprite.Height {
+				for sx := -radius; sx <= radius; sx++ {
+					if x+sx >= 0 && x+sx < sprite.Width {
+						if sx*sx+sy*sy <= radius*radius {
+							sprite.Pixels[y+sy][x+sx] = idx
+						}
+					}
+				}
+			}
+		}
+
+		(*spriteMapPtr)[name] = sprite
+		return 0
+	}))
+
+	// rf.setSpriteProperty(sprite_name, property, value) - Set sprite property (useCollision, isUI, lifetime, maxSpawn)
+	L.SetField(rf, "setSpriteProperty", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		property := L.CheckString(2)
+		value := L.CheckAny(3)
+
+		sprite, ok := (*spriteMapPtr)[name]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", name)
+			return 0
+		}
+
+		switch property {
+		case "useCollision":
+			if b, ok := value.(lua.LBool); ok {
+				sprite.UseCollision = bool(b)
+			} else {
+				L.RaiseError("useCollision must be boolean")
+				return 0
+			}
+		case "isUI":
+			if b, ok := value.(lua.LBool); ok {
+				sprite.IsUI = bool(b)
+			} else {
+				L.RaiseError("isUI must be boolean")
+				return 0
+			}
+		case "lifetime":
+			if n, ok := value.(lua.LNumber); ok {
+				sprite.Lifetime = int(n)
+			} else {
+				L.RaiseError("lifetime must be number")
+				return 0
+			}
+		case "maxSpawn":
+			if n, ok := value.(lua.LNumber); ok {
+				sprite.MaxSpawn = int(n)
+			} else {
+				L.RaiseError("maxSpawn must be number")
+				return 0
+			}
+		default:
+			L.RaiseError("unknown property: %s (use: useCollision, isUI, lifetime, maxSpawn)", property)
+			return 0
+		}
+
+		(*spriteMapPtr)[name] = sprite
+
+		// Automatically register/update pool if sprite now meets criteria
+		if spritepool.ShouldPool(sprite) {
+			// Register pool if it doesn't exist
+			if err := poolManager.RegisterSprite(name, sprite); err != nil {
+				// Log error but don't fail - pooling is optional
+				if devMode != nil {
+					devMode.AddDebugLog(fmt.Sprintf("Failed to create pool for sprite '%s': %v", name, err))
+				}
+			}
+		} else {
+			// Sprite no longer meets criteria - remove pool if it exists
+			if poolManager.HasPool(name) {
+				poolManager.RemovePool(name)
+			}
+		}
+
 		return 0
 	}))
 
@@ -986,12 +1415,19 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 			width := float64(L.CheckNumber(2))
 			height := float64(L.CheckNumber(3))
 			density := float64(L.OptNumber(4, 1.0))
+			restitution := float64(L.OptNumber(5, 0.0))
+			friction := float64(L.OptNumber(6, 0.2))
 
 			body, ok := physicsBodies[bodyId]
 			if !ok {
 				return 0
 			}
-			body.CreateBoxFixture(width, height, density)
+			// Use properties version if restitution or friction provided
+			if restitution > 0 || friction != 0.2 {
+				body.CreateBoxFixtureWithProps(width, height, density, restitution, friction)
+			} else {
+				body.CreateBoxFixture(width, height, density)
+			}
 			return 0
 		}))
 
@@ -999,12 +1435,19 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 			bodyId := L.CheckInt(1)
 			radius := float64(L.CheckNumber(2))
 			density := float64(L.OptNumber(3, 1.0))
+			restitution := float64(L.OptNumber(4, 0.0))
+			friction := float64(L.OptNumber(5, 0.2))
 
 			body, ok := physicsBodies[bodyId]
 			if !ok {
 				return 0
 			}
-			body.CreateCircleFixture(radius, density)
+			// Use properties version if restitution or friction provided
+			if restitution > 0 || friction != 0.2 {
+				body.CreateCircleFixtureWithProps(radius, density, restitution, friction)
+			} else {
+				body.CreateCircleFixture(radius, density)
+			}
 			return 0
 		}))
 

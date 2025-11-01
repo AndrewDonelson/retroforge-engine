@@ -9,7 +9,7 @@ import (
 
 // Test NewGameStateMachine
 func TestNewGameStateMachine(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	if gsm == nil {
 		t.Fatal("NewGameStateMachine returned nil")
@@ -25,7 +25,7 @@ func TestNewGameStateMachine(t *testing.T) {
 
 // Test Debug Mode
 func TestDebugMode(t *testing.T) {
-	gsm := NewGameStateMachine(true, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(true, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	if !gsm.IsDebug() {
 		t.Error("should be in debug mode")
@@ -41,7 +41,7 @@ func TestDebugMode(t *testing.T) {
 
 // Test AddCreditEntry
 func TestAddCreditEntry(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	gsm.AddCreditEntry("Developer", "John Doe", "Lead Developer")
 	gsm.AddCreditEntry("Artist", "Jane Smith", "Character Artist")
@@ -61,7 +61,7 @@ func TestAddCreditEntry(t *testing.T) {
 
 // Test GetEngineInfo
 func TestGetEngineInfo(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.2.3", "TestDeveloper")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.2.3", "TestDeveloper", nil, nil)
 
 	name, version, dev := gsm.GetEngineInfo()
 	if name != "TestEngine" {
@@ -77,7 +77,7 @@ func TestGetEngineInfo(t *testing.T) {
 
 // Test Start (non-debug)
 func TestStartNonDebug(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	err := gsm.Start("")
 	if err != nil {
@@ -96,7 +96,7 @@ func TestStartNonDebug(t *testing.T) {
 
 // Test Start (debug)
 func TestStartDebug(t *testing.T) {
-	gsm := NewGameStateMachine(true, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(true, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	// Create a test state
 	testState := &TestState{name: "test"}
@@ -118,7 +118,7 @@ func TestStartDebug(t *testing.T) {
 
 // Test Exit
 func TestExit(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	// Create and enter a test state
 	testState := &TestState{name: "test"}
@@ -141,7 +141,7 @@ func TestExit(t *testing.T) {
 
 // Test ChangeState prevents direct changes to built-in states
 func TestChangeStateProtection(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	// Try to directly change to engine splash
 	err := gsm.ChangeState(EngineSplashStateName)
@@ -158,7 +158,7 @@ func TestChangeStateProtection(t *testing.T) {
 
 // Test EngineSplashState
 func TestEngineSplashState(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 	splash := gsm.engineSplash
 
 	// Initialize
@@ -185,7 +185,7 @@ func TestEngineSplashState(t *testing.T) {
 
 // Test CreditsState
 func TestCreditsState(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 	credits := gsm.credits
 
 	// Initialize
@@ -249,7 +249,7 @@ func (ts *TestState) Shutdown() {
 
 // Test Start with empty initial state in debug mode
 func TestStartDebugEmptyState(t *testing.T) {
-	gsm := NewGameStateMachine(true, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(true, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	err := gsm.Start("")
 	if err != nil {
@@ -265,7 +265,7 @@ func TestStartDebugEmptyState(t *testing.T) {
 
 // Test ChangeState on GameStateMachine still works for non-builtin states
 func TestGameStateMachineChangeState(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	testState := &TestState{name: "test"}
 	gsm.RegisterStateInstance("test", testState)
@@ -283,7 +283,7 @@ func TestGameStateMachineChangeState(t *testing.T) {
 
 // Test that StateMachine methods still work on GameStateMachine
 func TestGameStateMachineInheritsMethods(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	testState := &TestState{name: "test"}
 	gsm.RegisterStateInstance("test", testState)
@@ -305,7 +305,7 @@ func TestGameStateMachineInheritsMethods(t *testing.T) {
 
 // Test ChangeState error path (trying to change to built-in states)
 func TestChangeStateToBuiltinError(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 
 	// Try to change to engine splash directly
 	err := gsm.ChangeState(EngineSplashStateName)
@@ -322,7 +322,7 @@ func TestChangeStateToBuiltinError(t *testing.T) {
 
 // Test EngineSplashState Draw, HandleInput, Update, Exit, Shutdown (coverage)
 func TestEngineSplashStateMethods(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 	splash := gsm.engineSplash
 
 	// Test all methods for coverage
@@ -345,7 +345,7 @@ func TestEngineSplashStateMethods(t *testing.T) {
 
 // Test CreditsState Draw, Exit, Shutdown (coverage)
 func TestCreditsStateMethods(t *testing.T) {
-	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev")
+	gsm := NewGameStateMachine(false, "TestEngine", "1.0.0", "TestDev", nil, nil)
 	credits := gsm.credits
 
 	credits.Initialize(gsm.StateMachine)

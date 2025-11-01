@@ -102,6 +102,30 @@ func (b *Body) CreateCircleFixture(radius float64, density float64) {
 	b.body.CreateFixture(&shape, density)
 }
 
+// CreateBoxFixtureWithProps adds a box-shaped fixture with physics properties
+func (b *Body) CreateBoxFixtureWithProps(width, height float64, density, restitution, friction float64) {
+	shape := box2d.MakeB2PolygonShape()
+	shape.SetAsBox(width/2.0, height/2.0)
+	fixtureDef := box2d.MakeB2FixtureDef()
+	fixtureDef.Shape = &shape
+	fixtureDef.Density = density
+	fixtureDef.Restitution = restitution
+	fixtureDef.Friction = friction
+	b.body.CreateFixtureFromDef(&fixtureDef)
+}
+
+// CreateCircleFixtureWithProps adds a circle-shaped fixture with physics properties
+func (b *Body) CreateCircleFixtureWithProps(radius float64, density, restitution, friction float64) {
+	shape := box2d.MakeB2CircleShape()
+	shape.M_radius = radius
+	fixtureDef := box2d.MakeB2FixtureDef()
+	fixtureDef.Shape = &shape
+	fixtureDef.Density = density
+	fixtureDef.Restitution = restitution
+	fixtureDef.Friction = friction
+	b.body.CreateFixtureFromDef(&fixtureDef)
+}
+
 // SetPosition sets the body's position
 func (b *Body) SetPosition(x, y float64) {
 	b.body.SetTransform(box2d.MakeB2Vec2(x, y), b.body.GetAngle())
@@ -116,6 +140,8 @@ func (b *Body) GetPosition() (x, y float64) {
 // SetVelocity sets the body's linear velocity
 func (b *Body) SetVelocity(vx, vy float64) {
 	b.body.SetLinearVelocity(box2d.MakeB2Vec2(vx, vy))
+	// Wake up the body if it's asleep (setting velocity should do this, but be explicit)
+	b.body.SetAwake(true)
 }
 
 // GetVelocity returns the body's linear velocity

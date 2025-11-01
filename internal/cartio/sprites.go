@@ -14,6 +14,9 @@ type SpriteData struct {
 	Pixels       [][]int      `json:"pixels"`       // 2D array of color indices (0-49, -1 for transparent)
 	UseCollision bool         `json:"useCollision"` // Enable collision detection with other sprites
 	MountPoints  []MountPoint `json:"mountPoints"`  // Array of mount points (e.g., for bullets, thrusters)
+	IsUI         bool         `json:"isUI"`         // If true, sprite is UI element and not affected by physics
+	Lifetime     int          `json:"lifetime"`     // Lifetime in milliseconds (0 = no lifetime limit)
+	MaxSpawn     int          `json:"maxSpawn"`     // Maximum instances that can be spawned simultaneously (0 = no limit)
 }
 
 // SpriteMap maps sprite names to their data

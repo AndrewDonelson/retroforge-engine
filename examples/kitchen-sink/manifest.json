@@ -1,0 +1,11 @@
+{
+  "title": "Kitchen Sink Demo",
+  "author": "RetroForge",
+  "description": "Comprehensive demo showcasing all engine features: modules, states, sprite pooling, physics, and more.",
+  "genre": "Demo",
+  "tags": ["example", "demo", "features"],
+  "entry": "main.lua",
+  "palette": "Grayscale 50",
+  "scale": 1
+}
+

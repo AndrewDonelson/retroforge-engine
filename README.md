@@ -112,6 +112,10 @@ make run-dev FOLDER=examples/moon-lander
 - **Palette**: 50 colors (compared to PICO-8's 16)
 - **Drawing primitives**: Lines, rectangles, circles, ellipses, triangles, polygons
 - **Sprites**: JSON-based sprite system with named sprites
+  - **Automatic pooling**: High-spawn sprites (maxSpawn > 10, isUI=false) are automatically pooled for performance
+  - **Programmatic creation**: Create and edit sprites at runtime with primitive drawing functions
+  - **Physics integration**: Sprites can automatically work with the physics system
+  - **Lifetime management**: Automatic destruction after specified duration
 - **Tilemap**: 256×256 tilemap support
 - **Camera**: Viewport/camera system
 - **Clipping**: Rectangular clipping regions

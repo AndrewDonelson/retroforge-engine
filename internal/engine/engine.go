@@ -8,6 +8,7 @@ import (
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
 	"github.com/AndrewDonelson/retroforge-engine/internal/eventbus"
+	"github.com/AndrewDonelson/retroforge-engine/internal/gamestate"
 	"github.com/AndrewDonelson/retroforge-engine/internal/graphics"
 	"github.com/AndrewDonelson/retroforge-engine/internal/lua"
 	"github.com/AndrewDonelson/retroforge-engine/internal/luabind"
@@ -28,7 +29,8 @@ type Engine struct {
 	Ren        graphics.Renderer
 	Pal        *pal.Manager
 	Physics    *physics.World
-	Network    *network.NetworkManager // Multiplayer networking
+	Network    *network.NetworkManager     // Multiplayer networking
+	GSM        *gamestate.GameStateMachine // Game state machine
 	sfxMap     cartio.SFXMap
 	musicMap   cartio.MusicMap
 	spritesMap cartio.SpriteMap
@@ -42,6 +44,12 @@ func New(targetFPS int) *Engine {
 	vm := lua.New()
 	ren := rendersoft.New(480, 270)
 	phys := physics.NewWorld(0, 9.8) // Default gravity: down (Y+) like real physics
+
+	// Create game state machine (will be set to debug mode in dev mode)
+	// isDebug=false means splash screen will show in release builds
+	// Note: renderer and palette will be set later in registerLuaBindings
+	gsm := gamestate.NewGameStateMachine(false, "RetroForge", "1.0.0", "RetroForge Team", nil, nil)
+
 	e := &Engine{
 		Bus:     bus,
 		Sched:   sched,
@@ -51,6 +59,7 @@ func New(targetFPS int) *Engine {
 		Pal:     pal.NewManager(),
 		Physics: phys,
 		Network: network.NewNetworkManager(),
+		GSM:     gsm,
 	}
 	// On each tick, call Lua update with dt seconds.
 	bus.Subscribe("tick", func(v any) {
@@ -73,8 +82,26 @@ func New(targetFPS int) *Engine {
 			// Update network frame (for multiplayer sync)
 			e.Network.UpdateFrame(dt)
 
-			_ = e.VM.CallUpdate(dtSec)
-			_ = e.VM.CallDraw()
+			// Use state machine if it has active states, otherwise fall back to direct Lua calls
+			if e.GSM != nil {
+				_, hasActiveState := e.GSM.GetActiveState()
+				if hasActiveState {
+					// Handle input
+					e.GSM.HandleInput()
+
+					// Update and draw using state machine
+					e.GSM.Update(dtSec)
+					e.GSM.Draw()
+				} else {
+					// Fallback: direct Lua calls for games not using state machine
+					_ = e.VM.CallUpdate(dtSec)
+					_ = e.VM.CallDraw()
+				}
+			} else {
+				// No state machine at all - use direct Lua calls
+				_ = e.VM.CallUpdate(dtSec)
+				_ = e.VM.CallDraw()
+			}
 
 			// Update debug stats (development mode only)
 			if e.devMode != nil && e.devMode.IsEnabled() {
@@ -131,8 +158,23 @@ func (a *devModeAdapter) GetStats() interface{} {
 }
 
 // LoadLuaSource loads script and calls init() if present.
+// Note: Lua bindings, RegisterStateMachine and RegisterModuleImport should be called before this.
 func (e *Engine) LoadLuaSource(src string) error {
-	// Register with dev mode if available
+	if err := e.VM.LoadString(src); err != nil {
+		return err
+	}
+	return e.VM.CallInit()
+}
+
+// registerLuaBindings registers all Lua bindings (rf.*, game.*, module import).
+// This should be called before LoadLuaSource.
+func (e *Engine) registerLuaBindings() {
+	// Update GSM with renderer and palette so splash/credits can draw
+	if e.GSM != nil {
+		e.GSM.SetRenderer(e.Ren)
+		e.GSM.SetPalette(e.Pal)
+	}
+
 	if e.devMode != nil && e.devMode.IsEnabled() {
 		// Create adapter that implements DevModeHandler interface
 		devAdapter := &devModeAdapter{devMode: e.devMode}
@@ -154,10 +196,9 @@ func (e *Engine) LoadLuaSource(src string) error {
 			return
 		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics, e.Network)
 	}
-	if err := e.VM.LoadString(src); err != nil {
-		return err
-	}
-	return e.VM.CallInit()
+
+	// Register state machine (needed for game.* API)
+	luabind.RegisterStateMachine(e.VM.L, e.GSM)
 }
 
 // RunFrames advances N frames headlessly.
@@ -188,6 +229,22 @@ func (e *Engine) LoadCartFromReader(r io.ReaderAt, size int64) error {
 	e.sfxMap = result.SFX
 	e.musicMap = result.Music
 	e.spritesMap = result.Sprites
+
+	// Register Lua bindings first (creates rf table)
+	e.registerLuaBindings()
+
+	// Register module import with file map for cart mode - rf table now exists
+	// Convert result.Files map to the format expected by module import
+	fileMap := make(map[string][]byte)
+	for path, data := range result.Files {
+		// Remove "assets/" prefix for module import
+		if len(path) > 7 && path[:7] == "assets/" {
+			fileMap[path[7:]] = data
+		} else {
+			fileMap[path] = data
+		}
+	}
+	luabind.RegisterModuleImportWithMap(e.VM.L, e.GSM, fileMap)
 
 	return e.LoadLuaSource(string(src))
 }

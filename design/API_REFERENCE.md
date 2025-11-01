@@ -49,6 +49,86 @@
 - `rf.spr(name, x, y, [flip_x, flip_y])` - Draw sprite by name at position (x, y). Optional horizontal/vertical flipping
 - `rf.sspr(name, sx, sy, sw, sh, dx, dy, [dw, dh, flip_x, flip_y])` - Draw sprite region. Scales from source (sx, sy, sw, sh) to destination (dx, dy, dw, dh)
 
+### Sprite Creation and Editing
+
+#### `rf.newSprite(name, width, height)`
+Creates a new empty sprite (all pixels transparent). Returns a sprite table.
+
+**Parameters:**
+- `name` (string): Unique name for the sprite
+- `width` (number): Sprite width in pixels (1-256)
+- `height` (number): Sprite height in pixels (1-256)
+
+**Returns:**
+- (table): Sprite data table with properties: `width`, `height`, `pixels`, `useCollision`, `isUI`, `lifetime`, `maxSpawn`, `mountPoints`
+
+**Default Properties:**
+- `isUI` (boolean): Default `true` - If `true`, sprite is a UI element and not affected by physics
+- `lifetime` (number): Default `0` - Lifetime in milliseconds (0 = no limit)
+- `maxSpawn` (number): Default `0` - Maximum instances that can be spawned simultaneously (0 = no limit)
+- `useCollision` (boolean): Default `false` - Enable collision detection with physics system
+
+**Example:**
+```lua
+local bullet = rf.newSprite("bullet", 8, 8)
+rf.setSpriteProperty("bullet", "isUI", false)
+rf.setSpriteProperty("bullet", "useCollision", true)
+rf.setSpriteProperty("bullet", "lifetime", 2000)  -- 2 seconds
+rf.setSpriteProperty("bullet", "maxSpawn", 50)
+```
+
+#### Sprite Primitive Drawing Functions
+These functions draw directly to sprite pixels instead of the screen:
+
+- `rf.sprite_pset(sprite_name, x, y, index)` - Set pixel in sprite at (x, y) to color index
+- `rf.sprite_line(sprite_name, x0, y0, x1, y1, index)` - Draw line in sprite
+- `rf.sprite_rect(sprite_name, x0, y0, x1, y1, index)` - Draw rectangle outline in sprite
+- `rf.sprite_rectfill(sprite_name, x0, y0, x1, y1, index)` - Draw filled rectangle in sprite
+- `rf.sprite_circ(sprite_name, x, y, radius, index)` - Draw circle outline in sprite
+- `rf.sprite_circfill(sprite_name, x, y, radius, index)` - Draw filled circle in sprite
+
+**Example:**
+```lua
+-- Create and draw a bullet sprite
+local bullet = rf.newSprite("bullet", 8, 8)
+rf.sprite_circfill("bullet", 4, 4, 3, 11)  -- Yellow circle
+rf.setSpriteProperty("bullet", "isUI", false)
+rf.setSpriteProperty("bullet", "useCollision", true)
+rf.setSpriteProperty("bullet", "lifetime", 1000)
+
+-- Now use it
+rf.spr("bullet", 100, 100)
+```
+
+#### `rf.setSpriteProperty(sprite_name, property, value)`
+Sets a sprite property. Available properties: `useCollision`, `isUI`, `lifetime`, `maxSpawn`.
+
+**Physics Integration:**
+- Sprites with `useCollision=true` automatically work with the physics & collision system
+- Sprites with `isUI=true` are UI elements and are NOT affected by physics (always rendered on top, no collision)
+- Use `lifetime` to automatically destroy sprite instances after a duration
+- Use `maxSpawn` to limit the number of simultaneous instances
+
+**Automatic Sprite Pooling:**
+- Sprites are automatically pooled when `isUI=false` AND `maxSpawn > 10`
+- Pooling happens transparently - no developer code changes needed
+- Pools improve performance by reusing sprite instances, reducing garbage collection
+- Pools are created automatically when:
+  - Sprites are loaded from `sprites.json` files
+  - Sprite properties are changed via `rf.setSpriteProperty()` and new criteria are met
+- Pools are automatically removed when sprite properties no longer meet criteria
+
+**Example:**
+```lua
+-- Create a physics-enabled projectile
+local projectile = rf.newSprite("projectile", 4, 4)
+rf.sprite_rectfill("projectile", 0, 0, 3, 3, 7)  -- White square
+rf.setSpriteProperty("projectile", "isUI", false)  -- Not UI
+rf.setSpriteProperty("projectile", "useCollision", true)  -- Enable physics
+rf.setSpriteProperty("projectile", "lifetime", 3000)  -- 3 second lifetime
+rf.setSpriteProperty("projectile", "maxSpawn", 10)  -- Max 10 at once
+```
+
 ### Tilemap
 - `rf.mget(x, y)` - Get tile value at map coordinate (x, y). Returns tile index (0 = empty)
 - `rf.mset(x, y, v)` - Set tile at map coordinate (x, y) to value v
@@ -119,13 +199,16 @@ Play music track by name (from `music.json`). Fallback to inline parameters if n
 ## Sprites
 
 ### `rf.sprite(name)`
-Get sprite data by name (from `sprites.json`). Returns table:
+Get sprite data by name (from `sprites.json` or created with `rf.newSprite`). Returns table:
 ```lua
 {
   width = 16,
   height = 16,
   pixels = {{row1}, {row2}, ...},  -- 2D array of color indices
   useCollision = true,
+  isUI = false,      -- If true, sprite is UI element (not affected by physics)
+  lifetime = 0,       -- Lifetime in milliseconds (0 = no limit)
+  maxSpawn = 0,      -- Maximum instances that can be spawned (0 = no limit)
   mountPoints = {
     [1] = {x = 8, y = 8, name = "thrust"},  -- Access by index
     ["thrust"] = {x = 8, y = 8, name = "thrust"}  -- Access by name
@@ -292,11 +375,149 @@ local PauseState = {
     
     -- Draw semi-transparent overlay
     rf.rectfill(0, 0, 480, 270, 0) -- Assuming color 0 with alpha
-    
-    -- Draw pause menu
-    rf.print("PAUSED", 200, 100, 7)
-  end
+```
+
+---
+
+## Module-Based State System
+
+The Module-Based State System provides a convention-based approach for defining game states. Instead of manually creating state tables and registering them, you can create separate `.lua` files that are automatically loaded and registered as states.
+
+### Importing State Modules
+
+#### `rf.import(filename)`
+Loads a Lua module file and automatically registers it as a game state.
+
+**Parameters:**
+- `filename` (string): Path to the state module file (relative to cart root, e.g., `"menu_state.lua"`)
+
+**Returns:**
+- (string): The registered state name
+
+**File Naming Convention:**
+- `menu_state.lua` → state name is `"menu"`
+- `playing_state.lua` → state name is `"playing"`
+- `game_over_state.lua` → state name is `"game_over"`
+- `pause.lua` → state name is `"pause"`
+- `shop.lua` → state name is `"shop"`
+
+**Required Functions:**
+Every state module must implement these five functions:
+- `_INIT()` - Called once when state is first created
+- `_UPDATE(dt)` - Called every frame while state is active (dt is delta time in seconds)
+- `_DRAW()` - Called every frame while state is active
+- `_HANDLE_INPUT()` - Called every frame while state is active (before update)
+- `_DONE()` - Called once when state is destroyed
+
+**Optional Functions:**
+- `_ENTER()` - Called every time state becomes active
+- `_EXIT()` - Called every time state becomes inactive
+
+**Example - main.lua:**
+```lua
+-- main.lua
+context = {
+  player = {x = 100, y = 100, lives = 3},
+  score = 0,
+  level = 1
 }
+
+function _init()
+  -- Import all state modules
+  rf.import("menu_state.lua")      -- Registers "menu"
+  rf.import("playing_state.lua")   -- Registers "playing"
+  rf.import("pause_state.lua")     -- Registers "pause"
+  rf.import("game_over_state.lua") -- Registers "game_over"
+  
+  -- Start at menu
+  game.changeState("menu")
+end
+```
+
+**Example - menu_state.lua:**
+```lua
+-- menu_state.lua
+
+-- Module-level state (persists across enter/exit)
+local selected = 1
+local menu_items = {"START GAME", "OPTIONS", "QUIT"}
+
+function _INIT()
+  -- One-time setup (called once)
+  rf.printh("Menu initialized")
+end
+
+function _ENTER()
+  -- Called every activation
+  selected = 1
+  rf.music("menu_theme")
+end
+
+function _HANDLE_INPUT()
+  -- Navigate menu
+  if rf.btnp(2) then  -- Up
+    selected = selected - 1
+    if selected < 1 then selected = #menu_items end
+    rf.sfx("cursor")
+  elseif rf.btnp(3) then  -- Down
+    selected = selected + 1
+    if selected > #menu_items then selected = 1 end
+    rf.sfx("cursor")
+  elseif rf.btnp(4) then  -- A button
+    if selected == 1 then
+      game.changeState("playing")
+    elseif selected == 3 then
+      game.exit()
+    end
+  end
+end
+
+function _UPDATE(dt)
+  -- Update animations, timers, etc.
+end
+
+function _DRAW()
+  rf.clear_i(0)
+  
+  -- Draw menu items
+  for i, item in ipairs(menu_items) do
+    local y = 100 + (i - 1) * 25
+    local color = (i == selected) and 11 or 7
+    local prefix = (i == selected) and "> " or "  "
+    rf.print_xy(180, y, prefix .. item, color)
+  end
+end
+
+function _EXIT()
+  rf.music("stopall")
+end
+
+function _DONE()
+  -- Final cleanup (called once on destroy)
+  rf.printh("Menu destroyed")
+end
+```
+
+**Module Environment:**
+- Module-level variables (declared with `local`) persist across enter/exit cycles
+- All modules share access to the global `context` table
+- All modules have access to `rf.*` and `game.*` APIs
+- Module-level state persists for the entire cart lifetime
+
+**Benefits:**
+1. **Separation of Concerns**: Each state lives in its own file
+2. **Convention Over Configuration**: Standardized function names
+3. **Automatic Registration**: No manual `game.registerState()` calls
+4. **Module Persistence**: Module-level variables persist across enter/exit cycles
+5. **Shared Context**: All states access a common context object
+6. **Cleaner main.lua**: Entry point stays minimal and focused
+
+**Error Handling:**
+- If a module file is not found, `rf.import()` will raise a runtime error
+- If required functions are missing, `rf.import()` will raise a runtime error listing the missing functions
+- If there's a syntax error in the module, `rf.import()` will raise a runtime error with details
+
+---
 ```
 
 ## Helper Functions
