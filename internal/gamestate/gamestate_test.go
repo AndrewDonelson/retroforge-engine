@@ -2,7 +2,6 @@ package gamestate
 
 import (
 	"testing"
-	"time"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/statemachine"
 )
@@ -175,8 +174,17 @@ func TestEngineSplashState(t *testing.T) {
 		t.Error("should not transition immediately")
 	}
 
-	// Wait for duration
-	time.Sleep(3 * time.Second)
+	// Simulate game loop - update with dt values to accumulate elapsedTime
+	// Splash duration is 2.0 seconds, so we need to accumulate at least 2.0 seconds
+	dt := 0.016 // ~60 FPS
+	updates := 0
+	for splash.elapsedTime < 2.5 { // Update a bit past the 2.0 second threshold
+		splash.Update(dt)
+		updates++
+		if updates > 200 { // Safety limit to prevent infinite loop
+			t.Fatal("too many updates needed - elapsedTime not accumulating")
+		}
+	}
 
 	if !splash.ShouldTransition() {
 		t.Error("should transition after duration")
@@ -201,23 +209,32 @@ func TestCreditsState(t *testing.T) {
 		t.Error("scroll offset should start at 0")
 	}
 
-	// Update
+	// Update a few times to advance frameCount (HandleInput requires frameCount >= 2)
 	credits.Update(0.016)
+	credits.Update(0.016)
+	credits.Update(0.016) // Now frameCount should be >= 2
 
 	if credits.GetScrollOffset() == 0 {
 		t.Error("scroll offset should increase after update")
 	}
 
-	// HandleInput should request exit
+	// HandleInput checks for input and only requests exit if input is present
+	// Since we can't mock input in tests, verify that HandleInput doesn't crash
+	// and respects the frameCount requirement (returns early if frameCount < 2)
+	
+	// Test that HandleInput with frameCount < 2 doesn't request exit (early return)
+	credits2 := gsm.credits
+	credits2.Enter(gsm.StateMachine) // Reset frameCount to 0
 	initialExit := gsm.ShouldExit()
-	credits.HandleInput(gsm.StateMachine)
-	if !gsm.ShouldExit() && !initialExit {
-		// Exit flag should be set (unless it was already set)
-		// Actually, RequestExit sets the flag, so let's check
-		if !gsm.ShouldExit() {
-			t.Error("HandleInput should request exit")
-		}
+	credits2.HandleInput(gsm.StateMachine) // Should return early (frameCount = 0)
+	if gsm.ShouldExit() != initialExit {
+		t.Error("HandleInput should not request exit when frameCount < 2")
 	}
+	
+	// Test that HandleInput with frameCount >= 2 runs without crashing
+	// (It won't request exit without actual input, which is correct behavior)
+	credits.HandleInput(gsm.StateMachine) // frameCount >= 2 from earlier updates
+	// Should not crash - exit state should be unchanged (no input available)
 }
 
 // TestState is a simple test state
@@ -332,11 +349,22 @@ func TestEngineSplashStateMethods(t *testing.T) {
 	splash.Exit(gsm.StateMachine)
 	splash.Shutdown()
 
-	// Verify state still works
+	// Verify state still works - test that ShouldTransition works after time accumulation
 	if !splash.ShouldTransition() {
 		// Should not transition immediately after Enter
 		splash.Enter(gsm.StateMachine)
-		time.Sleep(3 * time.Second)
+		
+		// Simulate game loop - update with dt values to accumulate elapsedTime
+		dt := 0.016 // ~60 FPS
+		updates := 0
+		for splash.elapsedTime < 2.5 { // Update past the 2.0 second threshold
+			splash.Update(dt)
+			updates++
+			if updates > 200 { // Safety limit
+				t.Fatal("too many updates needed - elapsedTime not accumulating")
+			}
+		}
+		
 		if !splash.ShouldTransition() {
 			t.Error("should transition after duration")
 		}

@@ -223,6 +223,9 @@ func (e *Engine) registerLuaBindings() {
 
 	// Register state machine (needed for game.* API)
 	luabind.RegisterStateMachine(e.VM.L, e.GSM)
+
+	// Register imgtool API
+	luabind.RegisterImgToolAPI(e.VM.L)
 }
 
 // RunFrames advances N frames headlessly.
