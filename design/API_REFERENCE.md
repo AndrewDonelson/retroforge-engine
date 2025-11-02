@@ -176,6 +176,7 @@ Check if button is pressed. Returns boolean.
 
 ### `rf.btnp(button)`
 Check if button was just pressed this frame (edge-triggered). Returns boolean.
+- **Note**: Edge detection works correctly because the engine calls `input.Step()` at the end of each frame, saving the current frame's button state for the next frame's comparison. This ensures reliable edge detection in both desktop and WASM builds.
 
 ### `rf.btnr(button)`
 Check if button was just released this frame. Returns boolean.

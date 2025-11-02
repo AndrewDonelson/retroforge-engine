@@ -10,6 +10,7 @@ import (
 	"github.com/AndrewDonelson/retroforge-engine/internal/eventbus"
 	"github.com/AndrewDonelson/retroforge-engine/internal/gamestate"
 	"github.com/AndrewDonelson/retroforge-engine/internal/graphics"
+	"github.com/AndrewDonelson/retroforge-engine/internal/input"
 	"github.com/AndrewDonelson/retroforge-engine/internal/lua"
 	"github.com/AndrewDonelson/retroforge-engine/internal/luabind"
 	"github.com/AndrewDonelson/retroforge-engine/internal/network"
@@ -48,7 +49,7 @@ func New(targetFPS int) *Engine {
 	// Create game state machine (will be set to debug mode in dev mode)
 	// isDebug=false means splash screen will show in release builds
 	// Note: renderer and palette will be set later in registerLuaBindings
-	gsm := gamestate.NewGameStateMachine(false, "RetroForge", "1.0.0", "RetroForge Team", nil, nil)
+	gsm := gamestate.NewGameStateMachine(false, "RetroForge", "v1.0 Alpha", "RetroForge Team", nil, nil)
 
 	e := &Engine{
 		Bus:     bus,
@@ -65,43 +66,66 @@ func New(targetFPS int) *Engine {
 	bus.Subscribe("tick", func(v any) {
 		if dt, ok := v.(time.Duration); ok {
 			dtSec := dt.Seconds()
+			
+		// Debug logging disabled - see cmd/wasm/main.go for frame-level logging
 
-			// Check for hot reload (development mode only)
-			if e.devMode != nil && e.devMode.CheckForReload() {
-				// Reload in background (don't block)
-				go func() {
-					if err := e.ReloadCart(); err != nil {
-						e.devMode.AddDebugLog(fmt.Sprintf("Reload failed: %v", err))
-					}
-				}()
+		// Check for hot reload (development mode only)
+		if e.devMode != nil && e.devMode.CheckForReload() {
+			// Reload synchronously (blocks to prevent race condition with VM)
+			// This is fast enough that it won't cause noticeable frame drops
+			if err := e.ReloadCart(); err != nil {
+				e.devMode.AddDebugLog(fmt.Sprintf("Reload failed: %v", err))
 			}
+			// Skip this frame's update/draw since we just reloaded
+			// Next frame will use the new VM
+			input.Step()
+			return
+		}
 
-			// Step physics before Lua update
-			e.Physics.Step()
+		// Skip VM calls if reload is in progress (shouldn't happen with sync reload, but safety check)
+		if e.devMode != nil && e.devMode.IsReloading() {
+			input.Step()
+			return
+		}
 
-			// Update network frame (for multiplayer sync)
-			e.Network.UpdateFrame(dt)
+		// Step physics before Lua update
+		e.Physics.Step()
 
-			// Use state machine if it has active states, otherwise fall back to direct Lua calls
-			if e.GSM != nil {
-				_, hasActiveState := e.GSM.GetActiveState()
-				if hasActiveState {
-					// Handle input
-					e.GSM.HandleInput()
+		// Update network frame (for multiplayer sync)
+		e.Network.UpdateFrame(dt)
+
+		// Use state machine if it has active states, otherwise fall back to direct Lua calls
+		if e.GSM != nil {
+			_, hasActiveState := e.GSM.GetActiveState()
+			if hasActiveState {
+				// Handle input BEFORE Step() - so Btn() can check current state
+				// Step() will be called AFTER to save state for next frame
+				e.GSM.HandleInput()
 
 					// Update and draw using state machine
 					e.GSM.Update(dtSec)
 					e.GSM.Draw()
 				} else {
-					// Fallback: direct Lua calls for games not using state machine
-					_ = e.VM.CallUpdate(dtSec)
-					_ = e.VM.CallDraw()
+					// No active state - this game doesn't use state machine (old-style Lua game)
+					// OR the splash was popped intentionally (e.g., game uses direct _UPDATE/_DRAW)
+					// Fallback to direct Lua calls - don't force splash again (would cause loop)
+					if e.VM != nil && e.VM.L != nil {
+						_ = e.VM.CallUpdate(dtSec)
+						_ = e.VM.CallDraw()
+					}
 				}
 			} else {
 				// No state machine at all - use direct Lua calls
-				_ = e.VM.CallUpdate(dtSec)
-				_ = e.VM.CallDraw()
+				if e.VM != nil && e.VM.L != nil {
+					_ = e.VM.CallUpdate(dtSec)
+					_ = e.VM.CallDraw()
+				}
 			}
+
+			// Step input state at the END of each frame
+			// This saves current frame's cur to prev, so next frame's btnp() can detect edges
+			// By doing this at the END, we capture all Set() calls that happened during the frame
+			input.Step()
 
 			// Update debug stats (development mode only)
 			if e.devMode != nil && e.devMode.IsEnabled() {
@@ -246,22 +270,33 @@ func (e *Engine) LoadCartFromReader(r io.ReaderAt, size int64) error {
 	}
 	luabind.RegisterModuleImportWithMap(e.VM.L, e.GSM, fileMap)
 
+	// Load and execute Lua source - this will register states via rf.import() calls
 	if err := e.LoadLuaSource(string(src)); err != nil {
 		return err
 	}
 
-	// Start the state machine after loading Lua (for cart files, not in debug mode)
+	// Start the state machine AFTER Lua has loaded and registered states
+	// LoadLuaSource executes the Lua code, which may call rf.import() to register states
+	// We need to start the state machine after those registrations are complete
 	// This will show the splash screen, then transition to the initial state set by the game
 	// Default to "menu" if no initial state is set by the game
 	if e.GSM != nil {
 		initialState := "menu" // Default initial state
+		// Note: GSM.Start() will transition to splash screen (if not debug mode),
+		// which will then transition to initialState once that state is registered
 		if startErr := e.GSM.Start(initialState); startErr != nil {
-			// If Start fails (e.g., no initial state), that's ok - game might not use state machine
-			// But log it if we're in dev mode
+			// If Start fails, the state machine stack might be empty
+			// This means GetActiveState() will return false, and we'll fall back to direct Lua calls
+			// That's ok - the game might not use state machine
 			if e.devMode != nil {
 				e.devMode.AddDebugLog(fmt.Sprintf("State machine start warning: %v", startErr))
 			}
 		}
+		// NOTE: We no longer force the splash screen if no active state is found.
+		// The splash screen will be added by Start() if needed (non-debug builds).
+		// If the stack becomes empty after the splash pops itself (e.g., for games that
+		// don't use the state machine), we fall back to direct Lua calls in the tick handler.
+		// Re-adding the splash here would cause an infinite loop.
 	}
 
 	return nil

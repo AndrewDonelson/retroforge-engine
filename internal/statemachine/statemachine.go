@@ -2,6 +2,7 @@ package statemachine
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 )
 
@@ -230,7 +231,22 @@ func (sm *StateMachine) doChangeState(name string) error {
 		return fmt.Errorf("state '%s' is not registered", name)
 	}
 
-	// Collect states to exit (while holding lock)
+	// IMPORTANT: Initialize the new state BEFORE clearing the stack
+	// This ensures that if initialization fails, the old stack remains intact
+	needsInit := !sm.initialized[name]
+	sm.mu.Unlock()
+
+	if needsInit {
+		if err := state.Initialize(sm); err != nil {
+			return fmt.Errorf("failed to initialize state '%s': %w", name, err)
+		}
+		sm.mu.Lock()
+		sm.initialized[name] = true
+		sm.mu.Unlock()
+	}
+
+	// Now that initialization is confirmed, collect states to exit and clear stack
+	sm.mu.Lock()
 	statesToExit := make([]State, len(sm.stateStack))
 	copy(statesToExit, sm.stateStack)
 	sm.stateStack = sm.stateStack[:0] // Clear stack
@@ -241,18 +257,8 @@ func (sm *StateMachine) doChangeState(name string) error {
 		top.Exit(sm)
 	}
 
+	// Add new state to stack
 	sm.mu.Lock()
-	// Initialize if first time
-	if !sm.initialized[name] {
-		sm.mu.Unlock()
-		if err := state.Initialize(sm); err != nil {
-			return fmt.Errorf("failed to initialize state '%s': %w", name, err)
-		}
-		sm.mu.Lock()
-		sm.initialized[name] = true
-	}
-
-	// Add to stack
 	sm.stateStack = append(sm.stateStack, state)
 	sm.mu.Unlock()
 
@@ -408,6 +414,9 @@ func (sm *StateMachine) HandleInput() {
 
 // Update calls Update on the top state
 func (sm *StateMachine) Update(dt float64) {
+	// Debug: log every call (WASM only, throttled) - disabled for now to avoid build issues
+	// Will add back with proper conditional compilation if needed
+	
 	// Process pending state changes FIRST (before calling Update on current state)
 	// This ensures state changes from previous frame are handled before the new state's Update runs
 	sm.mu.Lock()
@@ -438,31 +447,32 @@ func (sm *StateMachine) Update(dt float64) {
 	// Execute pending state changes outside lock to avoid deadlock
 	if pendingChange {
 		if err := sm.doChangeState(changeStateName); err != nil {
-			// State change failed - don't call Update this frame to avoid issues
-			sm.mu.Lock()
-			sm.inCallback = false
-			sm.mu.Unlock()
-			return
+			// State change failed (e.g., state not registered yet)
+			// Log the error for debugging (WASM only)
+			if runtime.GOOS == "js" {
+				if console := getJSConsole(); console != nil && console.Truthy() {
+					if jsVal, ok := console.(jsValue); ok {
+						jsVal.Call("error", "[StateMachine] doChangeState failed:", err.Error(), "target:", changeStateName)
+					}
+				}
+			}
+			// Continue - let the current state (splash) continue running
+			// This allows splash to retry the transition on subsequent frames
+			// Don't return early - let current state's Update() run so it can retry
 		}
-		// After state change, the new state is now on top, so it will get Update called below
+		// If state change succeeded, new state will get Update called below
 	} else if pendingPush {
 		if err := sm.doPushState(pushStateName); err != nil {
-			// State push failed - don't call Update this frame
-			sm.mu.Lock()
-			sm.inCallback = false
-			sm.mu.Unlock()
-			return
+			// State push failed - continue with current state
+			// Don't return early - let current state's Update() run
 		}
-		// After push, the new state is now on top, so it will get Update called below
+		// If push succeeded, new state will get Update called below
 	} else if pendingPop {
 		if err := sm.doPopState(); err != nil {
-			// State pop failed - don't call Update this frame
-			sm.mu.Lock()
-			sm.inCallback = false
-			sm.mu.Unlock()
-			return
+			// State pop failed - continue with current state
+			// Don't return early - let current state's Update() run
 		}
-		// After pop, the previous state is now on top, so it will get Update called below
+		// If pop succeeded, previous state will get Update called below
 	}
 
 	// Now call Update on the current top state (which may have just changed)
@@ -481,6 +491,8 @@ func (sm *StateMachine) Update(dt float64) {
 	if top != nil {
 		top.Update(dt)
 	}
+	// No active state - this is expected when splash pops for games without state machine
+	// The engine's tick handler will fall back to direct Lua calls
 
 	sm.mu.Lock()
 	sm.inCallback = false

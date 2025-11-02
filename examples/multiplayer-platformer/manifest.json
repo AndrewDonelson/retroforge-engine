@@ -1,19 +1,29 @@
 {
-  "version": "1.0",
-  "title": "Multiplayer Platformer Demo",
-  "author": "RetroForge Team",
-  "description": "Simple platformer demonstrating multiplayer sync",
-  "entry": "main.lua",
-  "palette": "SNES 50",
-  "multiplayer": {
-    "enabled": true,
-    "minPlayers": 2,
-    "maxPlayers": 6,
-    "supportsSolo": true,
-    "description": "Race to the top, avoid falling!"
+  "enabled": true,
+  "minPlayers": 2,
+  "maxPlayers": 6,
+  "supportsSolo": true,
+  "hasMultiplayer": true,
+  "fullManifest": {
+    "version": "1.0",
+    "title": "Multiplayer Platformer Demo",
+    "author": "RetroForge Team",
+    "description": "Simple platformer demonstrating multiplayer sync",
+    "entry": "main.lua",
+    "palette": "SNES 50",
+    "tags": ["demo", "platformer", "multiplayer"],
+    "cartVersion": "1.0.0",
+    "engineVersion": "2.0.0"
   },
-  "tags": ["demo", "platformer", "multiplayer"],
-  "cartVersion": "1.0.0",
-  "engineVersion": "2.0.0"
+  "manifestKeys": [
+    "version",
+    "title",
+    "author",
+    "description",
+    "entry",
+    "palette",
+    "tags",
+    "cartVersion",
+    "engineVersion"
+  ]
 }
-

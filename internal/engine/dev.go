@@ -26,6 +26,7 @@ type DevMode struct {
 	debugLogs      []string
 	debugMaxLogs   int
 	stats          DevStats
+	isReloading    bool // Flag to indicate reload is in progress
 }
 
 // DevStats holds debugging statistics
@@ -200,9 +201,10 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 		return fmt.Errorf("failed to enable dev mode: %w", err)
 	}
 
-	// Update GSM to debug mode (skip splash screen)
+	// Update GSM - use debug mode false to show splash screen even in dev mode
+	// (User wants to see splash screen in development too)
 	// Note: renderer and palette will be set in registerLuaBindings
-	e.GSM = gamestate.NewGameStateMachine(true, "RetroForge", "1.0.0", "RetroForge Team", nil, nil)
+	e.GSM = gamestate.NewGameStateMachine(false, "RetroForge", "v1.0 Alpha", "RetroForge Team", nil, nil)
 
 	// Read manifest.json
 	manifestPath := filepath.Join(cartPath, "manifest.json")
@@ -211,9 +213,23 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 		return fmt.Errorf("failed to read manifest.json: %w", err)
 	}
 
-	var m cartio.Manifest
-	if err := json.Unmarshal(mfBytes, &m); err != nil {
+	// Handle new manifest structure: extract from fullManifest if present
+	var rawManifest map[string]interface{}
+	if err := json.Unmarshal(mfBytes, &rawManifest); err != nil {
 		return fmt.Errorf("failed to parse manifest.json: %w", err)
+	}
+
+	var actualManifest map[string]interface{}
+	if fullManifest, ok := rawManifest["fullManifest"].(map[string]interface{}); ok {
+		actualManifest = fullManifest
+	} else {
+		actualManifest = rawManifest
+	}
+
+	var m cartio.Manifest
+	actualManifestBytes, _ := json.Marshal(actualManifest)
+	if err := json.Unmarshal(actualManifestBytes, &m); err != nil {
+		return fmt.Errorf("failed to parse manifest structure: %w", err)
 	}
 
 	// Set palette from manifest if specified
@@ -260,12 +276,8 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 	err = e.LoadLuaSource(string(src))
 	if err == nil {
 		// Start the state machine (shows splash in release, goes to initial state in debug)
-		// In debug mode, try to find a menu state or start with first registered state
-		initialState := ""
-		if e.devMode != nil && e.devMode.IsEnabled() {
-			// Debug mode: try to find menu state or use first registered state
-			initialState = "menu" // Default to menu in debug
-		}
+		// Pass "menu" as initial state - engine splash will transition to game splash if exists, then menu
+		initialState := "menu" // Default initial state
 		if startErr := e.GSM.Start(initialState); startErr != nil {
 			// If Start fails (e.g., no initial state), continue anyway
 			// State machine will be empty but that's ok for now
@@ -288,11 +300,34 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 	return err
 }
 
+// IsReloading returns whether a reload is currently in progress
+func (dm *DevMode) IsReloading() bool {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+	return dm.isReloading
+}
+
 // ReloadCart reloads the cart (development mode only)
 func (e *Engine) ReloadCart() error {
 	if e.devMode == nil || !e.devMode.IsEnabled() {
 		return fmt.Errorf("reload only available in development mode")
 	}
+
+	// Set reloading flag
+	e.devMode.mu.Lock()
+	if e.devMode.isReloading {
+		e.devMode.mu.Unlock()
+		return fmt.Errorf("reload already in progress")
+	}
+	e.devMode.isReloading = true
+	e.devMode.mu.Unlock()
+
+	// Ensure flag is cleared even if reload fails
+	defer func() {
+		e.devMode.mu.Lock()
+		e.devMode.isReloading = false
+		e.devMode.mu.Unlock()
+	}()
 
 	cartPath := e.devMode.cartPath
 	if cartPath == "" {
@@ -311,16 +346,30 @@ func (e *Engine) ReloadCart() error {
 	e.VM.Close()
 	e.VM = lua.New()
 
-	// Re-read manifest
+	// Re-read manifest (handle new manifest structure)
 	manifestPath := filepath.Join(cartPath, "manifest.json")
 	mfBytes, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to read manifest.json: %w", err)
 	}
 
-	var m cartio.Manifest
-	if err := json.Unmarshal(mfBytes, &m); err != nil {
+	// Handle new manifest structure: extract from fullManifest if present
+	var rawManifest map[string]interface{}
+	if err := json.Unmarshal(mfBytes, &rawManifest); err != nil {
 		return fmt.Errorf("failed to parse manifest.json: %w", err)
+	}
+
+	var actualManifest map[string]interface{}
+	if fullManifest, ok := rawManifest["fullManifest"].(map[string]interface{}); ok {
+		actualManifest = fullManifest
+	} else {
+		actualManifest = rawManifest
+	}
+
+	var m cartio.Manifest
+	actualManifestBytes, _ := json.Marshal(actualManifest)
+	if err := json.Unmarshal(actualManifestBytes, &m); err != nil {
+		return fmt.Errorf("failed to parse manifest structure: %w", err)
 	}
 
 	// Set palette from manifest if specified

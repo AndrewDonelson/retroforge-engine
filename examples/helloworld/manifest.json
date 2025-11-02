@@ -1,12 +1,27 @@
 {
-  "title": "Hello",
-  "author": "RetroForge",
-  "description": "Simple centered hello world",
-  "genre": "Demo",
-  "tags": ["example"],
-  "entry": "main.lua",
-  "palette": "RetroForge 50",
-  "scale": 1
+  "enabled": false,
+  "minPlayers": 2,
+  "maxPlayers": 6,
+  "supportsSolo": false,
+  "hasMultiplayer": false,
+  "fullManifest": {
+    "title": "Hello",
+    "author": "RetroForge",
+    "description": "Simple centered hello world",
+    "genre": "Demo",
+    "tags": ["example"],
+    "entry": "main.lua",
+    "palette": "RetroForge 50",
+    "scale": 1
+  },
+  "manifestKeys": [
+    "title",
+    "author",
+    "description",
+    "genre",
+    "tags",
+    "entry",
+    "palette",
+    "scale"
+  ]
 }
-
-

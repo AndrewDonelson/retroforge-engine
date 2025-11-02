@@ -56,6 +56,18 @@ run-dev: debug
 	@[ -n "$(FOLDER)" ] || FOLDER=examples/moon-lander; \
 	./$(BIN) -folder $$FOLDER -window -scale $(SCALE)
 
+# Run a specific example by name (e.g., make example moon-lander)
+example:
+	@[ -n "$(EXAMPLE)" ] || (echo "Usage: make example EXAMPLE=<name>" && echo "Examples: moon-lander, kitchen-sink, galaxy, helloworld" && false)
+	@FOLDER=examples/$(EXAMPLE); \
+	if [ ! -d $$FOLDER ]; then \
+		echo "Example '$(EXAMPLE)' not found in examples/ directory"; \
+		echo "Available examples:"; \
+		ls -1 examples/ | grep -v "\.rf$$" | sed 's/^/  - /'; \
+		false; \
+	fi
+	$(MAKE) run-dev FOLDER=$$FOLDER
+
 pack-hello: debug
 	./$(BIN) -pack examples/helloworld
 
@@ -76,10 +88,11 @@ clean:
 # Build WASM binary and place alongside wasm_exec.js for the webapp
 wasm:
 	mkdir -p ../retroforge-webapp/public/engine
-	@if [ -f "$$($(shell go env GOROOT))/misc/wasm/wasm_exec.js" ]; then \
-	  cp "$$(go env GOROOT)/misc/wasm/wasm_exec.js" ../retroforge-webapp/public/engine/ ; \
-	elif [ -f "$$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then \
-	  cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" ../retroforge-webapp/public/engine/ ; \
+	@GOROOT=$$(go env GOROOT); \
+	if [ -f "$$GOROOT/misc/wasm/wasm_exec.js" ]; then \
+	  cp "$$GOROOT/misc/wasm/wasm_exec.js" ../retroforge-webapp/public/engine/ ; \
+	elif [ -f "$$GOROOT/lib/wasm/wasm_exec.js" ]; then \
+	  cp "$$GOROOT/lib/wasm/wasm_exec.js" ../retroforge-webapp/public/engine/ ; \
 	else \
 	  echo "wasm_exec.js not found; please locate it in your Go installation"; exit 1; \
 	fi

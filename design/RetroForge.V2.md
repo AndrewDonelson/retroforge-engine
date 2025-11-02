@@ -1,6 +1,7 @@
 # RetroForge Multiplayer Game Engine - Complete Design Document
 
-**Version:** 2.0 (Multiplayer Edition)  
+**RetroForge Version:** v1.0 Alpha  
+**Document Version:** 2.0 (Multiplayer Edition)  
 **Date:** October 31, 2025  
 **Status:** FINAL - Ready for Implementation
 

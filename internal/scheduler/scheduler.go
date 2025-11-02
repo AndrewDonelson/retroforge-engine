@@ -1,13 +1,23 @@
 package scheduler
 
-import "time"
+import (
+	"runtime"
+	"time"
+)
 
 // Clock abstracts time for tests.
 type Clock interface { Now() time.Time; Sleep(d time.Duration) }
 
 type realClock struct{}
 func (realClock) Now() time.Time { return time.Now() }
-func (realClock) Sleep(d time.Duration) { time.Sleep(d) }
+func (realClock) Sleep(d time.Duration) { 
+	// In WASM (GOOS=js), time.Sleep can block the event loop
+	// Skip sleeping in WASM - the browser's requestAnimationFrame handles frame timing
+	if runtime.GOOS != "js" {
+		time.Sleep(d)
+	}
+	// In WASM, we rely on the browser's animation frame timing instead
+}
 
 // Scheduler runs a fixed-interval tick loop.
 type Scheduler struct {

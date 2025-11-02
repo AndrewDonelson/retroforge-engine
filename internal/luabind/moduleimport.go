@@ -16,26 +16,46 @@ func RegisterModuleImport(L *lua.LState, gsm *gamestate.GameStateMachine, fileRe
 	// Store loader in map keyed by Lua state
 	moduleLoaders[L] = loader
 
-	// rf.import(filename) -> stateName
+	// rf.import(filename) -> stateName (for state modules) or nil (for regular source files)
 	rf := L.GetGlobal("rf").(*lua.LTable)
 	L.SetField(rf, "import", L.NewFunction(func(L *lua.LState) int {
 		filename := L.CheckString(1)
 
-		// Get loader from map
-		loader, exists := moduleLoaders[L]
-		if !exists || loader == nil {
-			L.RaiseError("module loader not initialized")
-			return 0
-		}
+		// Check if this is a state module (ends with _state.lua pattern)
+		if modulestate.IsStateModule(filename) {
+			// Load as state module
+			loader, exists := moduleLoaders[L]
+			if !exists || loader == nil {
+				L.RaiseError("module loader not initialized")
+				return 0
+			}
 
-		stateName, err := loader.ImportModule(filename)
-		if err != nil {
-			L.RaiseError("failed to import module '%s': %v", filename, err)
-			return 0
-		}
+			stateName, err := loader.ImportModule(filename)
+			if err != nil {
+				L.RaiseError("failed to import module '%s': %v", filename, err)
+				return 0
+			}
 
-		L.Push(lua.LString(stateName))
-		return 1
+			L.Push(lua.LString(stateName))
+			return 1
+		} else {
+			// Load as regular source file (execute in global scope)
+			loader, exists := moduleLoaders[L]
+			if !exists || loader == nil {
+				L.RaiseError("module loader not initialized")
+				return 0
+			}
+
+			err := loader.ImportSource(filename)
+			if err != nil {
+				L.RaiseError("failed to import source file '%s': %v", filename, err)
+				return 0
+			}
+
+			// Return nil for regular source files (not state modules)
+			L.Push(lua.LNil)
+			return 1
+		}
 	}))
 }
 

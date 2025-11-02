@@ -26,6 +26,9 @@ func (v *VM) CallInit() error {
 
 // CallUpdate calls global function update(dt) if present.
 func (v *VM) CallUpdate(dtSeconds float64) error {
+    if v == nil || v.L == nil {
+        return nil
+    }
     if v.L.GetGlobal("_UPDATE") != lua.LNil {
         v.L.Push(v.L.GetGlobal("_UPDATE"))
         v.L.Push(lua.LNumber(dtSeconds))
@@ -39,9 +42,17 @@ func (v *VM) CallUpdate(dtSeconds float64) error {
     return nil
 }
 
-func (v *VM) CallDraw() error { return v.callIfExists("_DRAW", 0) }
+func (v *VM) CallDraw() error {
+    if v == nil || v.L == nil {
+        return nil
+    }
+    return v.callIfExists("_DRAW", 0)
+}
 
 func (v *VM) callIfExists(name string, narg int) error {
+    if v == nil || v.L == nil {
+        return nil
+    }
     if v.L.GetGlobal(name) == lua.LNil { return nil }
     v.L.Push(v.L.GetGlobal(name))
     return v.L.PCall(narg, 0, nil)

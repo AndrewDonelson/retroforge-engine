@@ -36,9 +36,9 @@ func (m *Manager) Color(i int) color.RGBA {
 }
 
 func (m *Manager) Set(name string) {
-    // TODO: support multiple named palettes; for now only default
-    _ = name
-    m.current = append([]color.RGBA{}, Default50...)
+	// Get the named palette (or default if not found)
+	pal := GetPalette(name)
+	m.current = pal
 }
 
 

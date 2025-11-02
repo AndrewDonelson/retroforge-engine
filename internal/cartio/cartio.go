@@ -125,7 +125,20 @@ func Read(r io.ReaderAt, size int64) (ReadResult, error) {
 
 		switch f.Name {
 		case "manifest.json":
-			if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+			var rawManifest map[string]interface{}
+			if err := json.Unmarshal(buf.Bytes(), &rawManifest); err != nil {
+				return ReadResult{}, err
+			}
+			// Handle new manifest structure: extract from fullManifest if present
+			var actualManifest map[string]interface{}
+			if fullManifest, ok := rawManifest["fullManifest"].(map[string]interface{}); ok {
+				actualManifest = fullManifest
+			} else {
+				actualManifest = rawManifest
+			}
+			// Re-marshal and unmarshal to populate Manifest struct
+			actualManifestBytes, _ := json.Marshal(actualManifest)
+			if err := json.Unmarshal(actualManifestBytes, &m); err != nil {
 				return ReadResult{}, err
 			}
 			continue

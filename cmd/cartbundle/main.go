@@ -6,6 +6,7 @@ import (
 	"bytes"
 	_ "embed"
 	"flag"
+	"fmt"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/engine"
 	"github.com/AndrewDonelson/retroforge-engine/internal/sdlrun"
@@ -29,7 +30,7 @@ func main() {
 	e := engine.New(60)
 	defer e.Close()
 	if err := e.LoadCartFromReader(bytes.NewReader(cartBytes), int64(len(cartBytes))); err != nil {
-		panic(err)
+		panic(fmt.Sprintf("failed to load cart: %v", err))
 	}
 	if err := sdlrun.RunWindow(e, *scale); err != nil {
 		panic(err)

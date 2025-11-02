@@ -1,12 +1,27 @@
 {
-  "title": "Moon Lander",
-  "author": "RetroForge",
-  "description": "Demo cart for a lunar landing game.",
-  "genre": "Demo",
-  "tags": ["example", "lander"],
-  "entry": "main.lua",
-  "palette": "Grayscale 50",
-  "scale": 1
+  "enabled": false,
+  "minPlayers": 2,
+  "maxPlayers": 6,
+  "supportsSolo": false,
+  "hasMultiplayer": false,
+  "fullManifest": {
+    "title": "Moon Lander",
+    "author": "RetroForge",
+    "description": "Demo cart for a lunar landing game.",
+    "genre": "Demo",
+    "tags": ["example", "lander"],
+    "entry": "main.lua",
+    "palette": "Grayscale 50",
+    "scale": 1
+  },
+  "manifestKeys": [
+    "title",
+    "author",
+    "description",
+    "genre",
+    "tags",
+    "entry",
+    "palette",
+    "scale"
+  ]
 }
-
-

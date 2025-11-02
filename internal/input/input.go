@@ -16,8 +16,9 @@ var cur [num]bool
 var prev [num]bool
 
 func Step() { prev = cur }
+
 func Set(i int, down bool) { if i>=0 && i<num { cur[i] = down } }
+
 func Btn(i int) bool { if i<0 || i>=num { return false }; return cur[i] }
+
 func Btnp(i int) bool { if i<0 || i>=num { return false }; return cur[i] && !prev[i] }
-
-

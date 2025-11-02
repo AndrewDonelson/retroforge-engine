@@ -52,6 +52,7 @@ func RunWindow(e *engine.Engine, scale int) error {
 	for running {
 		// Step input state BEFORE polling events (prev = cur, then we update cur)
 		// This ensures btnp() works correctly by comparing current vs previous state
+		// NOTE: This must happen before polling events, unlike WASM where input is set asynchronously
 		input.Step()
 
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -76,6 +77,8 @@ func RunWindow(e *engine.Engine, scale int) error {
 				case sdl.K_UP:
 					input.Set(input.BtnUp, down)
 				case sdl.K_DOWN:
+					input.Set(input.BtnDown, down)
+				case sdl.K_ESCAPE: // ESC also maps to Down button for pause
 					input.Set(input.BtnDown, down)
 				case sdl.K_z, sdl.K_RETURN: // O
 					input.Set(input.BtnO, down)

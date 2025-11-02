@@ -26,6 +26,20 @@ func (fsr *FileSystemReader) ReadFile(path string) ([]byte, error) {
 	} else {
 		fullPath = path
 	}
+	
+	// Try exact path first
+	if data, err := os.ReadFile(fullPath); err == nil {
+		return data, nil
+	}
+	
+	// If no extension, try with .lua extension
+	if filepath.Ext(fullPath) == "" {
+		if data, err := os.ReadFile(fullPath + ".lua"); err == nil {
+			return data, nil
+		}
+	}
+	
+	// Return original error
 	return os.ReadFile(fullPath)
 }
 

@@ -35,6 +35,14 @@ func NewModuleLoader(L *lua.LState, gsm *gamestate.GameStateMachine, fileReader 
 	}
 }
 
+// IsStateModule checks if a filename matches the state module pattern
+// Pattern: {name}_state.lua → state module
+func IsStateModule(filename string) bool {
+	name := filepath.Base(filename)
+	name = strings.TrimSuffix(name, ".lua")
+	return strings.HasSuffix(name, "_state")
+}
+
 // ExtractStateName extracts the state name from a filename
 // Pattern: {name}_state.lua or {name}.lua → state name is {name}
 func ExtractStateName(filename string) string {
@@ -115,6 +123,31 @@ func (ml *ModuleLoader) ImportModule(filename string) (string, error) {
 	ml.loadedModules[stateName] = moduleEnv
 
 	return stateName, nil
+}
+
+// ImportSource loads a Lua source file and executes it in the global scope
+// This is for regular source files (not state modules)
+func (ml *ModuleLoader) ImportSource(filename string) error {
+	// Read the file
+	content, err := ml.fileReader.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("failed to read source file '%s': %w", filename, err)
+	}
+
+	// Load and execute the Lua code in the global scope
+	chunk, err := ml.L.LoadString(string(content))
+	if err != nil {
+		return fmt.Errorf("failed to compile source file '%s': %w", filename, err)
+	}
+
+	// Execute in global scope (no environment isolation)
+	ml.L.Push(chunk)
+	err = ml.L.PCall(0, lua.MultRet, nil)
+	if err != nil {
+		return fmt.Errorf("failed to execute source file '%s': %w", filename, err)
+	}
+
+	return nil
 }
 
 // createModuleEnvironment creates an isolated Lua environment for a module

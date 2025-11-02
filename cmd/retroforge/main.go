@@ -24,8 +24,23 @@ func packDir(dir, out string) error {
 	if err != nil {
 		return err
 	}
+	
+	// Handle new manifest structure: extract from fullManifest if present
+	var rawManifest map[string]interface{}
+	if err := json.Unmarshal(mfBytes, &rawManifest); err != nil {
+		return err
+	}
+	
+	var actualManifest map[string]interface{}
+	if fullManifest, ok := rawManifest["fullManifest"].(map[string]interface{}); ok {
+		actualManifest = fullManifest
+	} else {
+		actualManifest = rawManifest
+	}
+	
 	var m cartio.Manifest
-	if err := json.Unmarshal(mfBytes, &m); err != nil {
+	actualManifestBytes, _ := json.Marshal(actualManifest)
+	if err := json.Unmarshal(actualManifestBytes, &m); err != nil {
 		return err
 	}
 
