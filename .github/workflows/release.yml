@@ -34,6 +34,11 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: Install SDL2 dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
+
       - name: Determine version type
         id: version_type
         run: |
