@@ -50,6 +50,7 @@ jobs:
           fi
 
       - name: Build all platforms
+        working-directory: ${{ github.workspace }}
         run: |
           chmod +x build-production.sh
           ./build-production.sh ${{ steps.version_type.outputs.type }}

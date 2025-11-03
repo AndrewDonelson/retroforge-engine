@@ -15,10 +15,15 @@ NC='\033[0m' # No Color
 # Determine version type (alpha or beta) - default to alpha
 VERSION_TYPE=${1:-alpha}
 
+# Ensure we're in the repo root (where this script is located)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
 # Generate version string: YEAR.MM.DD.HHMM-alpha/beta
 VERSION=$(date +"%Y.%m.%d.%H%M")-${VERSION_TYPE}
 
 echo -e "${GREEN}Building RetroForge Engine v${VERSION}${NC}"
+echo -e "${YELLOW}Working directory: $(pwd)${NC}"
 echo ""
 
 # Create bin directory
@@ -33,6 +38,9 @@ rm -f "${BIN_DIR}"/*
 LDFLAGS="-s -w"
 PKG="./cmd/retroforge"
 WASM_PKG="./cmd/wasm"
+
+# Get module name for absolute package path if needed
+MODULE_NAME=$(go list -m)
 
 # Function to build for a platform
 build_platform() {
@@ -105,7 +113,37 @@ fi
 # Build WASM
 echo -e "${YELLOW}Building WASM...${NC}"
 WASM_FILENAME="retroforge-${VERSION}.wasm"
-GOOS=js GOARCH=wasm go build -ldflags "${LDFLAGS}" -o "${BIN_DIR}/${WASM_FILENAME}" ${WASM_PKG}
+
+# Ensure we're still in the repo root (in case build_platform changed directories)
+cd "$SCRIPT_DIR" || exit 1
+
+# Verify the WASM package directory exists
+if [ ! -d "./cmd/wasm" ]; then
+    echo -e "${RED}✗ WASM package directory not found: ./cmd/wasm${NC}"
+    echo -e "${RED}Current directory: $(pwd)${NC}"
+    echo -e "${RED}Expected location: $SCRIPT_DIR/cmd/wasm${NC}"
+    ls -la cmd/ 2>&1 | head -10
+    exit 1
+fi
+
+# Build WASM (no CGO needed)
+echo -e "${YELLOW}Building WASM from: $(pwd)${NC}"
+echo -e "${YELLOW}WASM package: ${WASM_PKG}${NC}"
+echo -e "${YELLOW}Module: ${MODULE_NAME}${NC}"
+
+# Build WASM - use module path for better reliability
+BUILD_OUTPUT=$(GOOS=js GOARCH=wasm go build -ldflags "${LDFLAGS}" -o "${BIN_DIR}/${WASM_FILENAME}" "${MODULE_NAME}/cmd/wasm" 2>&1)
+BUILD_STATUS=$?
+
+if [ ${BUILD_STATUS} -ne 0 ]; then
+    echo -e "${RED}✗ Failed to build WASM${NC}"
+    echo -e "${RED}Build output:${NC}"
+    echo "$BUILD_OUTPUT"
+    echo -e "${RED}WASM build is critical. Please fix the issue and try again.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Built ${WASM_FILENAME}${NC}"
 
 # Copy wasm_exec.js if available
 GOROOT=$(go env GOROOT)
