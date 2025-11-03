@@ -2,6 +2,9 @@
 /bin/
 /build/
 /dist/
+# Compiled binaries (root directory)
+/imgtool
+/retroforge
 *.exe
 *.exe~
 *.dll
