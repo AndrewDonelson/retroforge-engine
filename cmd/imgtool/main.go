@@ -22,6 +22,7 @@ func main() {
 	rootCmd.AddCommand(commands.MapPaletteCmd())
 	rootCmd.AddCommand(commands.ScaleCmd())
 	rootCmd.AddCommand(commands.ToSpriteCmd())
+	rootCmd.AddCommand(commands.ToRPICommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

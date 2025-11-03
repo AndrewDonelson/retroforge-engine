@@ -223,8 +223,9 @@ func (ess *EngineSplashState) HandleInput(sm *statemachine.StateMachine) {
 	// Any input can skip the splash - transition immediately
 	// Use Btn() instead of Btnp() to detect any currently pressed button
 	// (Btnp requires edge detection which is timing-sensitive in WASM)
+	// Check all 11 buttons (0-10) for the universal input system
 	hasInput := false
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 11; i++ {
 		if input.Btn(i) {
 			hasInput = true
 			break
@@ -392,9 +393,9 @@ func (cs *CreditsState) HandleInput(sm *statemachine.StateMachine) {
 	}
 
 	// Only exit if there's actual user input (any button pressed)
-	// Check all buttons - if any are currently pressed, exit
+	// Check all 11 buttons (0-10) - if any are currently pressed, exit
 	hasInput := false
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 11; i++ {
 		if input.Btnp(i) {
 			hasInput = true
 			break

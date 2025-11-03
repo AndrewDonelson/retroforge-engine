@@ -17,3 +17,6 @@ func logBtn(i int, result bool, cur bool, prev bool) {}
 // logBtnp is a no-op for non-WASM builds
 func logBtnp(i int, cur bool, prev bool, stepped bool) {}
 
+// logBtnpFalse is a no-op for non-WASM builds
+func logBtnpFalse(i int, cur bool, prev bool) {}
+

@@ -16,9 +16,11 @@ You control the **Blue Light Cycle** starting from a random position at the bott
 
 ## Controls
 
-- **Arrow Keys**: Turn your light cycle (Left/Right/Up/Down)
-- **O/X/Enter**: Menu selection
-- **ESC**: Quit
+- **Arrow Keys / WASD**: Turn your light cycle (Left/Right/Up/Down)
+- **START (Enter/Escape)**: Pause game
+- **A (Z/Space)**: Menu selection
+- **TURBO (Shift)**: Boost (increases speed by 50% while held)
+- **Mobile/Tablet**: On-screen virtual controller in portrait mode
 
 ## Build and Run
 

@@ -1,9 +1,15 @@
 {
-  "move": {
+  "turn": {
     "type": "sine",
-    "freq": 520,
-    "duration": 0.05,
-    "gain": 0.25
+    "freq": 440,
+    "duration": 0.08,
+    "gain": 0.3
+  },
+  "move": {
+    "type": "thrust",
+    "freq": 45,
+    "duration": 0.1,
+    "gain": 0.075
   },
   "select": {
     "type": "sine",
@@ -17,11 +23,23 @@
     "duration": 0.25,
     "gain": 0.4
   },
-  "land": {
+  "lost": {
+    "type": "sine",
+    "freq": 200,
+    "duration": 0.5,
+    "gain": 0.35
+  },
+  "won": {
     "type": "sine",
     "freq": 880,
-    "duration": 0.12,
+    "duration": 0.15,
     "gain": 0.3
+  },
+  "boost": {
+    "type": "thrust",
+    "freq": 80,
+    "duration": 0.1,
+    "gain": 0.15
   }
 }
 

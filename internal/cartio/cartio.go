@@ -161,6 +161,22 @@ func Read(r io.ReaderAt, size int64) (ReadResult, error) {
 			}
 			continue
 		}
+		
+		// Check for .rpi files (Raw Palette Indexed images)
+		// Format: assets/name.rpi -> sprite name "name"
+		if len(f.Name) > 4 && f.Name[:7] == "assets/" && f.Name[len(f.Name)-4:] == ".rpi" {
+			spriteName := f.Name[7 : len(f.Name)-4] // Remove "assets/" prefix and ".rpi" suffix
+			rpiSprite, err := LoadRPI(buf.Bytes())
+			if err == nil {
+				if spriteMap == nil {
+					spriteMap = make(SpriteMap)
+				}
+				spriteMap[spriteName] = *rpiSprite
+				continue
+			}
+			// If LoadRPI fails, continue to store as regular file
+		}
+		
 		files[f.Name] = buf.Bytes()
 	}
 

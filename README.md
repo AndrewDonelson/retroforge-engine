@@ -133,8 +133,10 @@ make run-dev FOLDER=examples/moon-lander
 - **Forces and impulses**: Realistic physics interactions
 
 ### Input
-- **8 standard buttons**: Left, Right, Up, Down, Z, X, plus extended buttons
+- **11 universal buttons**: SELECT, START, UP, DOWN, LEFT, RIGHT, A, B, X, Y, TURBO
+- **Cross-platform**: Works consistently on desktop (keyboard), mobile (touch controller), and tablet
 - **Edge detection**: `btnp()` for just-pressed detection
+- **Mobile support**: Automatic on-screen virtual controller in portrait mode
 - **Multiplayer input**: Host can check other players' inputs
 
 ### Memory & Persistence

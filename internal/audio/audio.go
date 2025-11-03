@@ -2,6 +2,7 @@
 package audio
 
 import (
+    "fmt"
     "math"
     "sync"
     "time"
@@ -46,22 +47,39 @@ func randFloat() float64 { seed = 1664525*seed + 1013904223; return float64(seed
 func PlaySine(freq, dur, gain float64) { mu.Lock(); defer mu.Unlock(); voices = append(voices, &voice{kind:"sine", freq:freq, gain:gain, tleft:dur}) }
 func PlayNoise(dur, gain float64)     { mu.Lock(); defer mu.Unlock(); voices = append(voices, &voice{kind:"noise", gain:gain, tleft:dur}) }
 
-// Thrust on/off: looped low buzz
+// Thrust on/off: looped low buzz (uses default 110 Hz, 0.2 gain)
 var thrustOn bool
 func Thrust(on bool) {
+    PlayThrust(on, 110, 0.2)
+}
+
+// PlayThrust plays a looped thrust sound with custom frequency and gain
+var activeThrusts = make(map[string]*voice) // Track active thrusts by key
+func PlayThrust(on bool, freq, gain float64) {
     mu.Lock(); defer mu.Unlock()
-    if on && !thrustOn {
-        voices = append(voices, &voice{kind:"loop", freq:110, gain:0.2, tleft:-1})
-        thrustOn = true
-    } else if !on && thrustOn {
-        // stop only looped voices; keep one-shots playing
+    key := fmt.Sprintf("%.0f:%.2f", freq, gain) // Create unique key for freq:gain combo
+    _, exists := activeThrusts[key]
+    
+    if on && !exists {
+        v := &voice{kind:"loop", freq:freq, gain:gain, tleft:-1}
+        voices = append(voices, v)
+        activeThrusts[key] = v
+        if !thrustOn {
+            thrustOn = true // Track if any thrust is on
+        }
+    } else if !on && exists {
+        // Stop this specific thrust
         n := voices[:0]
         for _, v := range voices {
-            if v.kind == "loop" { continue }
+            if v == activeThrusts[key] { continue } // Skip this one
             n = append(n, v)
         }
         voices = n
-        thrustOn = false
+        delete(activeThrusts, key)
+        // If no more thrusts, clear the flag
+        if len(activeThrusts) == 0 {
+            thrustOn = false
+        }
     }
 }
 
@@ -69,6 +87,7 @@ func Thrust(on bool) {
 func StopAll() {
     mu.Lock()
     voices = []*voice{}
+    activeThrusts = make(map[string]*voice)
     mu.Unlock()
     if dev != 0 {
         sdl.ClearQueuedAudio(dev)

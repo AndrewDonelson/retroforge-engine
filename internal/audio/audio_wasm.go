@@ -37,9 +37,18 @@ func PlayNotes(tokens []string, bpm float64, gain float64) {
 	}
 }
 func Thrust(on bool) {
-	if fn := js.Global().Get("rf_audio_thrust"); fn.Truthy() {
-		fn.Invoke(on)
-	} else if !on {
-		StopAll()
+	PlayThrust(on, 110, 0.2)
+}
+
+func PlayThrust(on bool, freq, gain float64) {
+	if fn := js.Global().Get("rf_audio_playThrust"); fn.Truthy() {
+		fn.Invoke(on, freq, gain)
+	} else {
+		// Fallback to old thrust API (single global thrust)
+		if fn := js.Global().Get("rf_audio_thrust"); fn.Truthy() {
+			fn.Invoke(on)
+		} else if !on {
+			StopAll()
+		}
 	}
 }

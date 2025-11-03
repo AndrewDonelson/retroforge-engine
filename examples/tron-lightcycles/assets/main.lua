@@ -1,53 +1,47 @@
 -- Tron Light Cycles game
+-- Using GameStateMachine with module-based states
 
-local state = "menu" -- menu | playing | gameover | victory
-local menu_idx = 1
-local level = 1
-local best_level = 1
-local score = 0
+-- Shared game state (accessible by all state modules)
+level = 1
+best_level = 1
+score = 0
+countdown = 3.0
+move_timer = 0.0
 
--- Grid settings
-local GRID_WIDTH = 480
-local GRID_HEIGHT = 270
-local CELL_SIZE = 3 -- pixels per grid cell
-local GRID_W = math.floor(GRID_WIDTH / CELL_SIZE) -- 160 cells
-local GRID_H = math.floor(GRID_HEIGHT / CELL_SIZE) -- 90 cells
+-- Player and enemies (shared)
+player = nil
+enemies = {}
+num_enemies = 0
+
+-- Grid settings (shared constants)
+GRID_WIDTH = 480
+GRID_HEIGHT = 270
+CELL_SIZE = 3 -- pixels per grid cell
+GRID_W = math.floor(GRID_WIDTH / CELL_SIZE) -- 160 cells
+GRID_H = math.floor(GRID_HEIGHT / CELL_SIZE) -- 90 cells
 
 -- Directions: 0=up, 1=right, 2=down, 3=left
-local DIR_UP = 0
-local DIR_RIGHT = 1
-local DIR_DOWN = 2
-local DIR_LEFT = 3
+DIR_UP = 0
+DIR_RIGHT = 1
+DIR_DOWN = 2
+DIR_LEFT = 3
 
 -- Color indices (using Super Mario 50 palette: 0-49)
-local COLOR_BLACK = 0
-local COLOR_WHITE = 1
-local COLOR_CYAN = 31 -- Light Cyan / Aqua Blue
-local COLOR_GRAY = 25 -- Gray for dimmed text
-local COLOR_RED = 4 -- Red for game over
-local COLOR_BLUE = 48 -- Blue for menu highlights
+COLOR_BLACK = 0
+COLOR_WHITE = 1
+COLOR_CYAN = 31 -- Light Cyan / Aqua Blue
+COLOR_GRAY = 25 -- Gray for dimmed text
+COLOR_RED = 4 -- Red for game over
+COLOR_BLUE = 48 -- Blue for menu highlights
 
--- Light cycle color definitions: {head, first_trail, rest_trail}
--- Pattern: Each color has 3 shades - shadow (darkest), base (middle), highlight (brightest)
--- Head uses base (middle), first trail uses highlight (brightest), rest uses shadow (darkest)
--- 
--- Player: Blue shades
---   47 = shadow (darker), 48 = base (middle), 49 = highlight (brighter)
-local PLAYER_COLORS = {head = 48, trail1 = 49, trail2 = 47}
+-- Light cycle trail color definitions for Super Mario 50 palette
+-- Yellow (player): 8=highlight, 9=base, 10=shadow
+-- Red (enemies): 2=highlight, 3=base, 4=shadow
+PLAYER_TRAIL_COLORS = {highlight = 8, base = 9, shadow = 10}
+ENEMY_TRAIL_COLORS = {highlight = 2, base = 3, shadow = 4}
 
--- Enemy colors (3 shades each: shadow, base, highlight)
--- Enemy 1: Orange shades - 2=shadow, 3=base, 4=highlight
--- Enemy 2: Yellow-Green shades - 8=shadow, 9=base, 10=highlight  
--- Enemy 3: Dark Blue shades - 14=shadow, 15=base, 16=highlight
--- Enemy 4-6: Will cycle through these 3 color sets
-local ENEMY_COLOR_SETS = {
-  {head = 3, trail1 = 4, trail2 = 2},    -- Enemy 1: Orange (base=3, highlight=4, shadow=2)
-  {head = 9, trail1 = 10, trail2 = 8}, -- Enemy 2: Yellow-Green (base=9, highlight=10, shadow=8)
-  {head = 15, trail1 = 16, trail2 = 14}, -- Enemy 3: Dark Blue (base=15, highlight=16, shadow=14)
-}
-
--- Game grid (true = occupied, false = empty)
-local grid = {}
+-- Game grid (true = occupied, false = empty) - shared
+grid = {}
 for y=0,GRID_H-1 do
   grid[y] = {}
   for x=0,GRID_W-1 do
@@ -67,42 +61,38 @@ local function create_cycle(x, y, dir, colors)
   }
 end
 
--- Player and enemies
-local player = nil
-local enemies = {}
-local num_enemies = 0
+-- (Player and enemies already declared in shared section above)
 
--- Game parameters (scale with level)
-local base_speed = 5.0 -- moves per second
-local speed = base_speed
-local base_trail_length = 20
-local trail_length = base_trail_length
-local move_timer = 0.0
+-- Game parameters (scale with level) - shared
+base_speed = 5.0 -- moves per second
+speed = base_speed
+base_trail_length = 20
+trail_length = base_trail_length
 
--- Level seed for deterministic placement
-local level_seed = 0
+-- Level seed for deterministic placement - shared
+level_seed = 0
 
--- Random number generator using level seed
-local function srnd()
+-- Random number generator using level seed (shared functions)
+function srnd()
   level_seed = (1103515245*level_seed + 12345) % 2147483648
   return level_seed
 end
 
-local function frand(a, b)
+function frand(a, b)
   return a + (srnd() % 10000) / 10000 * (b - a)
 end
 
-local function randi(a, b)
+function randi(a, b)
   return math.floor(frand(a, b + 1))
 end
 
--- Get number of enemies for a level
-local function get_enemy_count(lvl)
+-- Get number of enemies for a level (shared function)
+function get_enemy_count(lvl)
   return math.min(6, math.floor((lvl - 1) / 5) + 1)
 end
 
--- Initialize level
-local function init_level(lvl)
+-- Initialize level (shared function)
+function init_level(lvl)
   level = lvl
   level_seed = lvl * 7919 -- prime multiplier for variation
   
@@ -130,14 +120,13 @@ local function init_level(lvl)
   -- Place player at random bottom position, facing up
   local player_x = randi(5, GRID_W - 6)
   local player_y = GRID_H - 3
-  player = create_cycle(player_x, player_y, DIR_UP, PLAYER_COLORS)
+  player = create_cycle(player_x, player_y, DIR_UP, {}) -- Colors no longer used, kept for compatibility
   player.trail = {}
   grid[player_y][player_x] = true
   
   -- Place enemies
   enemies = {}
   for i=1,num_enemies do
-    local enemy_colors = ENEMY_COLOR_SETS[((i-1) % #ENEMY_COLOR_SETS) + 1]
     local placed = false
     local attempts = 0
     while not placed and attempts < 100 do
@@ -166,7 +155,7 @@ local function init_level(lvl)
         end
         
         if not too_close then
-          local enemy = create_cycle(ex, ey, edir, enemy_colors)
+          local enemy = create_cycle(ex, ey, edir, {}) -- Colors no longer used, kept for compatibility
           enemy.trail = {}
           grid[ey][ex] = true
           table.insert(enemies, enemy)
@@ -180,27 +169,27 @@ local function init_level(lvl)
   move_timer = 0.0
 end
 
--- Convert grid position to screen coordinates
-local function grid_to_screen(gx, gy)
+-- Convert grid position to screen coordinates (shared function)
+function grid_to_screen(gx, gy)
   return gx * CELL_SIZE + math.floor(CELL_SIZE / 2), 
          gy * CELL_SIZE + math.floor(CELL_SIZE / 2)
 end
 
--- Convert screen coordinates to grid position
-local function screen_to_grid(sx, sy)
+-- Convert screen coordinates to grid position (shared function)
+function screen_to_grid(sx, sy)
   return math.floor(sx / CELL_SIZE), math.floor(sy / CELL_SIZE)
 end
 
--- Check if position is valid and not occupied
-local function can_move(gx, gy)
+-- Check if position is valid and not occupied (shared function)
+function can_move(gx, gy)
   if gx < 0 or gx >= GRID_W or gy < 0 or gy >= GRID_H then
     return false
   end
   return not grid[gy][gx]
 end
 
--- Move a light cycle
-local function move_cycle(cycle)
+-- Move a light cycle (shared function)
+function move_cycle(cycle)
   if not cycle.alive then return false end
   
   local new_x, new_y = cycle.x, cycle.y
@@ -250,8 +239,8 @@ local function move_cycle(cycle)
   return true
 end
 
--- AI for enemy cycles (smarter: prefer straight, only turn when necessary)
-local function update_enemy_ai(enemy)
+-- AI for enemy cycles (smarter: prefer straight, only turn when necessary) - shared function
+function update_enemy_ai(enemy)
   if not enemy.alive then return end
   
   -- First, check if current direction is still safe
@@ -316,325 +305,172 @@ local function update_enemy_ai(enemy)
   end
 end
 
-local countdown = 3.0
-local gameover_timer = 0.0
-
 function _INIT()
-  rf.palette_set("default")
-  state = "menu"
+  rf.palette_set("Super Mario 50")
+  
+  -- Import state modules
+  rf.import("splash_state.lua")
+  rf.import("menu_state.lua")
+  rf.import("play_state.lua")
+  rf.import("pause_state.lua")
+  rf.import("gameover_state.lua")
+  
+  -- Initialize game variables
   level = 1
   score = 0
-  menu_time = 0.0
+  best_level = 1
+end
+
+-- (Update functions are now in state modules)
+
+-- Draw a 4-pixel-wide trail segment behind a cycle position (shared function)
+-- dir: direction cycle is moving (0=up, 1=right, 2=down, 3=left)
+-- gx, gy: grid position
+-- colors: {highlight, base, shadow} color indices
+function draw_trail_segment(gx, gy, dir, colors)
+  local sx, sy = grid_to_screen(gx, gy)
   
-  -- Play futuristic menu music
-  rf.music("menu_music")
-end
-
-local function update_menu(dt)
-  if rf.btnp(2) then -- Up
-    menu_idx = math.max(1, menu_idx - 1)
-    rf.sfx("move")
-  end
-  if rf.btnp(3) then -- Down
-    menu_idx = math.min(2, menu_idx + 1)
-    rf.sfx("move")
-  end
-  if rf.btnp(4) or rf.btnp(5) then -- Select
-    if menu_idx == 1 then
-      rf.sfx("select")
-      level = 1
-      score = 0
-      init_level(level)
-      state = "playing"
-      countdown = 3.0
-      rf.music("start_melody")
-    else
-      rf.sfx("select")
-      rf.quit()
-    end
+  -- Trail is 4 pixels wide, perpendicular to movement direction
+  -- Pattern: shadow (outer), base, base (center), highlight (outer)
+  if dir == DIR_UP or dir == DIR_DOWN then
+    -- Moving vertically, trail is horizontal (left-right)
+    -- Draw 4 pixels centered: shadow, base, base, highlight
+    rf.pset(sx - 1, sy, colors.shadow)   -- Left edge
+    rf.pset(sx, sy, colors.base)          -- Left center
+    rf.pset(sx + 1, sy, colors.base)      -- Right center
+    rf.pset(sx + 2, sy, colors.highlight) -- Right edge
+  else
+    -- Moving horizontally, trail is vertical (up-down)
+    -- Draw 4 pixels centered: shadow, base, base, highlight
+    rf.pset(sx, sy - 1, colors.shadow)    -- Top edge
+    rf.pset(sx, sy, colors.base)          -- Top center
+    rf.pset(sx, sy + 1, colors.base)      -- Bottom center
+    rf.pset(sx, sy + 2, colors.highlight) -- Bottom edge
   end
 end
 
-local function update_countdown(dt)
-  local prev_int = math.ceil(countdown)
-  countdown = math.max(0, countdown - dt)
-  local now_int = math.ceil(countdown)
-  if now_int < prev_int and now_int > 0 then
-    rf.tone(600, 0.1, 0.3)
-  end
-end
-
-local function update_gameplay(dt)
-  -- Handle player input
-  if player.alive then
-    if rf.btnp(0) then -- Left
-      if player.dir ~= DIR_RIGHT then
-        player.dir = DIR_LEFT
-        rf.sfx("move")
-      end
-    elseif rf.btnp(1) then -- Right
-      if player.dir ~= DIR_LEFT then
-        player.dir = DIR_RIGHT
-        rf.sfx("move")
-      end
-    elseif rf.btnp(2) then -- Up
-      if player.dir ~= DIR_DOWN then
-        player.dir = DIR_UP
-        rf.sfx("move")
-      end
-    elseif rf.btnp(3) then -- Down
-      if player.dir ~= DIR_UP then
-        player.dir = DIR_DOWN
-        rf.sfx("move")
-      end
-    end
-  end
+-- Draw trail line connecting two grid positions (shared function)
+-- This fills gaps between segments
+function draw_trail_line(gx1, gy1, gx2, gy2, dir, colors)
+  local sx1, sy1 = grid_to_screen(gx1, gy1)
+  local sx2, sy2 = grid_to_screen(gx2, gy2)
   
-  -- Update move timer
-  move_timer = move_timer + dt * speed
+  -- Draw line between points with 4-pixel width
+  local dx = sx2 - sx1
+  local dy = sy2 - sy1
+  local steps = math.max(math.abs(dx), math.abs(dy))
   
-  if move_timer >= 1.0 then
-    move_timer = move_timer - 1.0
-    
-    -- Update AI for enemies
-    for i=1,#enemies do
-      if enemies[i].alive then
-        update_enemy_ai(enemies[i])
-      end
+  if dir == DIR_UP or dir == DIR_DOWN then
+    -- Vertical movement, horizontal trail
+    for step = 0, steps do
+      local t = steps > 0 and (step / steps) or 0
+      local x = math.floor(sx1 + dx * t)
+      local y = math.floor(sy1 + dy * t)
+      rf.pset(x - 1, y, colors.shadow)
+      rf.pset(x, y, colors.base)
+      rf.pset(x + 1, y, colors.base)
+      rf.pset(x + 2, y, colors.highlight)
     end
-    
-    -- Move player
-    if player.alive then
-      if not move_cycle(player) then
-        -- Player crashed
-        rf.sfx("crash")
-        state = "gameover"
-        gameover_timer = 0.0
-        best_level = math.max(best_level, level)
-      end
-    end
-    
-    -- Move enemies
-    for i=1,#enemies do
-      if enemies[i].alive then
-        if not move_cycle(enemies[i]) then
-          -- Enemy crashed
-          rf.sfx("crash")
-        end
-      end
-    end
-    
-    -- Check if player won (all enemies dead)
-    local all_enemies_dead = true
-    for i=1,#enemies do
-      if enemies[i].alive then
-        all_enemies_dead = false
-        break
-      end
-    end
-    
-    if player.alive and all_enemies_dead then
-      rf.sfx("land") -- Victory sound
-      score = score + level * 100
-      level = level + 1
-      init_level(level)
-      countdown = 2.0
+  else
+    -- Horizontal movement, vertical trail
+    for step = 0, steps do
+      local t = steps > 0 and (step / steps) or 0
+      local x = math.floor(sx1 + dx * t)
+      local y = math.floor(sy1 + dy * t)
+      rf.pset(x, y - 1, colors.shadow)
+      rf.pset(x, y, colors.base)
+      rf.pset(x, y + 1, colors.base)
+      rf.pset(x, y + 2, colors.highlight)
     end
   end
 end
 
-local function update_gameover(dt)
-  gameover_timer = gameover_timer + dt
-  if gameover_timer >= 3.0 then
-    if rf.btnp(4) or rf.btnp(5) then
-      rf.sfx("select")
-      state = "menu"
-      menu_idx = 1
+-- Draw rotated sprite manually (since rf.spr doesn't support rotation) - shared function
+function draw_sprite_rotated(name, x, y, angle)
+  local sprite = rf.sprite(name)
+  if not sprite then return end
+  
+  local w, h = sprite.width, sprite.height
+  local cx, cy = x + w / 2, y + h / 2 -- Center point
+  
+  -- Convert angle (0=up, 90=right, 180=down, 270=left) to radians
+  local rad = (angle * math.pi) / 180
+  local cos_a = math.cos(rad)
+  local sin_a = math.sin(rad)
+  
+  -- Draw sprite pixels with rotation
+  for sy = 0, h - 1 do
+    for sx = 0, w - 1 do
+      local px = sx - w / 2 + 0.5
+      local py = sy - h / 2 + 0.5
+      
+      -- Rotate around center
+      local rx = px * cos_a - py * sin_a
+      local ry = px * sin_a + py * cos_a
+      
+      local draw_x = math.floor(cx + rx)
+      local draw_y = math.floor(cy + ry)
+      
+      local color_idx = sprite.pixels[sy + 1][sx + 1] -- Lua is 1-indexed
+      if color_idx >= 0 then -- -1 is transparent
+        rf.pset(draw_x, draw_y, color_idx)
+      end
     end
   end
 end
 
-function _UPDATE(dt)
-  if state == "menu" then
-    menu_time = menu_time + dt
-    update_menu(dt)
-  elseif state == "playing" then
-    if countdown > 0 then
-      update_countdown(dt)
-    else
-      update_gameplay(dt)
-    end
-  elseif state == "gameover" then
-    update_gameover(dt)
-  end
-end
-
-local function draw_cycle(cycle)
+function draw_cycle(cycle, is_player)
   if not cycle.alive then return end
   
-  -- Draw trail with gradient
-  -- First trail segment uses trail1 color, rest use trail2 color
-  for i=1,#cycle.trail do
-    local pos = cycle.trail[i]
-    local sx, sy = grid_to_screen(pos.x, pos.y)
-    local trail_color = cycle.colors.trail2 -- Default: rest of trail
-    if i == #cycle.trail then
-      -- First trail segment (closest to head) uses trail1
-      trail_color = cycle.colors.trail1
-    end
-    rf.circfill(sx, sy, 2, trail_color)
-  end
+  -- Determine trail colors
+  local trail_colors = is_player and PLAYER_TRAIL_COLORS or ENEMY_TRAIL_COLORS
   
-  -- Draw cycle head
-  local sx, sy = grid_to_screen(cycle.x, cycle.y)
-  rf.circfill(sx, sy, 3, cycle.colors.head)
-end
-
-local menu_time = 0.0
-
-local function draw_menu()
-  -- Animated background grid effect
-  local grid_spacing = 8
-  for y=0,GRID_HEIGHT-1,grid_spacing do
-    for x=0,GRID_WIDTH-1,grid_spacing do
-      local phase = (x + y + menu_time * 20) % 100
-      if phase < 50 then
-        local sx = x
-        local sy = y
-        local alpha = math.floor(phase / 50 * 60 + 20)
-        rf.pset(sx, sy, COLOR_CYAN)
+  -- Draw continuous trail (no gaps)
+  if #cycle.trail > 0 then
+    -- Draw segments and lines between them to fill gaps
+    for i=1,#cycle.trail do
+      local pos = cycle.trail[i]
+      -- Determine direction based on movement from this segment to next (or current for last)
+      local trail_dir = cycle.dir
+      if i < #cycle.trail then
+        -- Determine direction from this segment to next
+        local next_pos = cycle.trail[i+1]
+        local dx = next_pos.x - pos.x
+        local dy = next_pos.y - pos.y
+        if dx > 0 then trail_dir = DIR_RIGHT
+        elseif dx < 0 then trail_dir = DIR_LEFT
+        elseif dy > 0 then trail_dir = DIR_DOWN
+        else trail_dir = DIR_UP
+        end
+        
+        -- Draw line between this segment and next to fill gap
+        draw_trail_line(pos.x, pos.y, next_pos.x, next_pos.y, trail_dir, trail_colors)
+      else
+        -- Last segment - draw line to current cycle position
+        draw_trail_line(pos.x, pos.y, cycle.x, cycle.y, cycle.dir, trail_colors)
       end
     end
   end
   
-  -- Title at top center
-  rf.print_anchored("TRON", "topcenter", COLOR_BLUE)
-  local cycles_y = 70
-  local cycles_x = 240 - string.len("LIGHT CYCLES")*3
-  rf.print_xy(cycles_x, cycles_y, "LIGHT CYCLES", COLOR_BLUE)
+  -- Draw cycle sprite rotated to face direction
+  local sx, sy = grid_to_screen(cycle.x, cycle.y)
+  local sprite_name = is_player and "player" or "enemy"
   
-  -- Menu items (use blue for selected, gray for dimmed)
-  local c1 = (menu_idx == 1) and COLOR_BLUE or COLOR_GRAY
-  local c2 = (menu_idx == 2) and COLOR_BLUE or COLOR_GRAY
+  -- Convert direction to angle: 0=up, 90=right, 180=down, 270=left
+  local angle = cycle.dir * 90
   
-  local play_x = 240 - string.len("PLAY")*3
-  local quit_x = 240 - string.len("QUIT")*3
-  rf.print_xy(play_x, 110, "PLAY", c1)
-  rf.print_xy(quit_x, 126, "QUIT", c2)
-  
-  -- Instructions
-  local turn_x = 240 - string.len("Arrow keys: Turn")*3
-  local select_x = 240 - string.len("O/X/Enter: Select")*3
-  rf.print_xy(turn_x, 160, "Arrow keys: Turn", COLOR_GRAY)
-  rf.print_xy(select_x, 176, "O/X/Enter: Select", COLOR_GRAY)
-  
-  -- Best score
-  local best_text = "Best Level: " .. tostring(best_level)
-  local best_x = 240 - string.len(best_text)*3
-  rf.print_xy(best_x, 210, best_text, COLOR_GRAY)
-  
-  -- Decorative light cycle trails
-  local trail_time = menu_time * 0.5
-  for i=1,3 do
-    local trail_x = 120 + i * 80 + math.sin(trail_time + i) * 40
-    local trail_y = 230 + math.cos(trail_time * 0.7 + i) * 20
-    -- Use same colors as in game: base for head, highlight for first trail, shadow for rest
-    local head_colors = {48, 3, 15} -- Player base, Enemy 1 base, Enemy 3 base
-    local trail1_colors = {49, 4, 16} -- Player highlight, Enemy 1 highlight, Enemy 3 highlight
-    local trail2_colors = {47, 2, 14} -- Player shadow, Enemy 1 shadow, Enemy 3 shadow
-    rf.circfill(trail_x, trail_y, 3, head_colors[i]) -- Head (base)
-    rf.circfill(trail_x - 5, trail_y - 2, 2, trail1_colors[i]) -- First trail segment (highlight)
-    rf.circfill(trail_x - 10, trail_y - 4, 2, trail2_colors[i]) -- Rest of trail (shadow)
-  end
+  -- Center 16x16 sprite on grid position (sprite origin is top-left, so offset by -8)
+  draw_sprite_rotated(sprite_name, sx - 8, sy - 8, angle)
 end
 
-local function draw_hud()
-  rf.print_xy(2, 2, "LEVEL: " .. tostring(level), COLOR_WHITE)
-  rf.print_xy(2, 12, "SCORE: " .. tostring(score), COLOR_WHITE)
-  rf.print_xy(2, 22, "ENEMIES: " .. tostring(num_enemies), COLOR_WHITE)
+-- Draw HUD (shared function)
+function draw_hud()
+  -- Score and level at top left
+  local score_text = "SCORE: " .. tostring(score)
+  local level_text = "LEVEL: " .. tostring(level)
+  rf.print_xy(2, 2, score_text, COLOR_WHITE)
+  rf.print_xy(2, 10, level_text, COLOR_WHITE)
 end
 
-local function draw_playing()
-  -- Draw grid background (optional subtle grid)
-  for y=0,GRID_H-1,5 do
-    for x=0,GRID_W-1,5 do
-      local sx, sy = grid_to_screen(x, y)
-      rf.pset(sx, sy, COLOR_WHITE)
-    end
-  end
-  
-  -- Draw enemy cycles
-  for i=1,#enemies do
-    draw_cycle(enemies[i])
-  end
-  
-  -- Draw player cycle
-  if player then
-    draw_cycle(player)
-  end
-  
-  -- Draw HUD
-  draw_hud()
-  
-  -- Draw countdown
-  if countdown > 0 then
-    local level_text = "LEVEL " .. tostring(level)
-    local level_x = 240 - string.len(level_text)*3
-    rf.print_xy(level_x, 120, level_text, COLOR_WHITE)
-    if math.ceil(countdown) > 0 then
-      local ready_text = "GET READY: " .. tostring(math.ceil(countdown))
-      local ready_x = 240 - string.len(ready_text)*3
-      rf.print_xy(ready_x, 140, ready_text, COLOR_WHITE)
-    else
-      local go_x = 240 - string.len("GO!")*3
-      rf.print_xy(go_x, 140, "GO!", COLOR_WHITE)
-    end
-  end
-end
-
-local function draw_gameover()
-  -- Redraw game state
-  for y=0,GRID_H-1,5 do
-    for x=0,GRID_W-1,5 do
-      local sx, sy = grid_to_screen(x, y)
-      rf.pset(sx, sy, COLOR_WHITE)
-    end
-  end
-  
-  for i=1,#enemies do
-    draw_cycle(enemies[i])
-  end
-  
-  if player then
-    draw_cycle(player)
-  end
-  
-  draw_hud()
-  
-  local gameover_x = 240 - string.len("GAME OVER")*3
-  local level_text = "Level: " .. tostring(level)
-  local level_x = 240 - string.len(level_text)*3
-  local score_text = "Score: " .. tostring(score)
-  local score_x = 240 - string.len(score_text)*3
-  rf.print_xy(gameover_x, 110, "GAME OVER", COLOR_RED)
-  rf.print_xy(level_x, 130, level_text, COLOR_WHITE)
-  rf.print_xy(score_x, 150, score_text, COLOR_WHITE)
-  if gameover_timer >= 3.0 then
-    local continue_text = "Press O/X/Enter to continue"
-    local continue_x = 240 - string.len(continue_text)*3
-    rf.print_xy(continue_x, 170, continue_text, COLOR_GRAY)
-  end
-end
-
-function _DRAW()
-  rf.clear_i(COLOR_BLACK)
-  
-  if state == "menu" then
-    draw_menu()
-  elseif state == "playing" then
-    draw_playing()
-  elseif state == "gameover" then
-    draw_gameover()
-  end
-end
+-- (Drawing functions are now in state modules)
 

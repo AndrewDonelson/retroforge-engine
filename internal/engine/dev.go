@@ -264,6 +264,26 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 	if b, err := os.ReadFile(spritesPath); err == nil {
 		json.Unmarshal(b, &e.spritesMap)
 	}
+	
+	// Load .rpi files (Raw Palette Indexed images)
+	assetsPathForRPI := filepath.Join(cartPath, "assets")
+	if entries, err := os.ReadDir(assetsPathForRPI); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if len(name) > 4 && name[len(name)-4:] == ".rpi" {
+				spriteName := name[:len(name)-4] // Remove .rpi extension
+				rpiPath := filepath.Join(assetsPathForRPI, name)
+				if data, err := os.ReadFile(rpiPath); err == nil {
+					if rpiSprite, err := cartio.LoadRPI(data); err == nil {
+						e.spritesMap[spriteName] = *rpiSprite
+					}
+				}
+			}
+		}
+	}
 
 	// Register Lua bindings first (creates rf table)
 	e.registerLuaBindings()
@@ -401,6 +421,26 @@ func (e *Engine) ReloadCart() error {
 	e.spritesMap = make(cartio.SpriteMap)
 	if b, err := os.ReadFile(spritesPath); err == nil {
 		json.Unmarshal(b, &e.spritesMap)
+	}
+	
+	// Load .rpi files (Raw Palette Indexed images) - also on reload
+	assetsPathForRPI := filepath.Join(cartPath, "assets")
+	if entries, err := os.ReadDir(assetsPathForRPI); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if len(name) > 4 && name[len(name)-4:] == ".rpi" {
+				spriteName := name[:len(name)-4] // Remove .rpi extension
+				rpiPath := filepath.Join(assetsPathForRPI, name)
+				if data, err := os.ReadFile(rpiPath); err == nil {
+					if rpiSprite, err := cartio.LoadRPI(data); err == nil {
+						e.spritesMap[spriteName] = *rpiSprite
+					}
+				}
+			}
+		}
 	}
 
 	// Register Lua bindings first (creates rf table)

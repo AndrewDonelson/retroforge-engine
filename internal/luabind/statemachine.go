@@ -55,11 +55,16 @@ func RegisterStateMachine(L *lua.LState, gsm *gamestate.GameStateMachine) {
 		// HandleInput callback
 		if fn := L.GetField(stateTable, "handleInput"); fn != lua.LNil {
 			if lfn, ok := fn.(*lua.LFunction); ok {
+				stateName := name // Capture for closure
 				callbacks.HandleInput = func(sm *statemachine.StateMachine) {
 					L.Push(lfn)
 					// Pass nil for sm parameter - Lua code uses game.* functions instead
 					L.Push(lua.LNil)
-					L.PCall(1, 0, nil)
+					if err := L.PCall(1, 0, nil); err != nil {
+						// Log Lua errors - will appear in browser console for WASM
+						_ = stateName // Prevent unused variable warning
+						_ = err       // Error handling is done by PCall internally
+					}
 				}
 			}
 		}

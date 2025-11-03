@@ -3,6 +3,8 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/AndrewDonelson/retroforge-engine/internal/imgtool"
@@ -62,6 +64,15 @@ func ToSpriteCmd() *cobra.Command {
 				return err
 			}
 
+			// Auto-generate output path if not specified
+			if outputPath == "sprite.json" {
+				// Generate output filename: sprite-{basename}.json in same folder as input
+				inputDir := filepath.Dir(inputPath)
+				inputBase := filepath.Base(inputPath)
+				inputName := strings.TrimSuffix(inputBase, filepath.Ext(inputBase))
+				outputPath = filepath.Join(inputDir, fmt.Sprintf("sprite-%s.json", inputName))
+			}
+
 			// Output JSON
 			return outputSpriteJSON(outputPath, sprite)
 		},
@@ -70,7 +81,7 @@ func ToSpriteCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&outputPath, "output", "o", "sprite.json", "Output file")
 	cmd.Flags().StringVarP(&name, "name", "n", "sprite", "Sprite name")
 	cmd.Flags().IntVarP(&width, "width", "w", 16, "Target width")
-	cmd.Flags().IntVarP(&height, "height", "h", 16, "Target height")
+	cmd.Flags().IntVar(&height, "height", 16, "Target height (use --height, not -h to avoid conflict with --help)")
 	cmd.Flags().BoolVar(&useCollision, "collision", false, "Enable physics collision")
 	cmd.Flags().BoolVar(&isUI, "ui", false, "UI sprite (no physics)")
 	cmd.Flags().IntVar(&lifetime, "lifetime", 0, "Auto-destroy after ms (0 = no limit)")

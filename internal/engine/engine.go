@@ -94,17 +94,25 @@ func New(targetFPS int) *Engine {
 		// Update network frame (for multiplayer sync)
 		e.Network.UpdateFrame(dt)
 
+		// Step input state FIRST (same as SDL) - copy cur → prev
+		// This ensures btnp() works correctly: prev has old state, cur will be updated by input
+		// Then HandleInput() checks: prev (old) vs cur (new) → btnp() detects edges correctly
+		input.Step()
+
 		// Use state machine if it has active states, otherwise fall back to direct Lua calls
 		if e.GSM != nil {
 			_, hasActiveState := e.GSM.GetActiveState()
 			if hasActiveState {
-				// Handle input BEFORE Step() - so Btn() can check current state
-				// Step() will be called AFTER to save state for next frame
+				// Handle input AFTER Step() - now prev has old state, cur has new state
+				// This matches SDL behavior exactly
 				e.GSM.HandleInput()
 
 					// Update and draw using state machine
 					e.GSM.Update(dtSec)
 					e.GSM.Draw()
+					
+					// Clear stale justPressed flags at end of frame (after HandleInput/Draw)
+					input.ClearStaleJustPressed()
 				} else {
 					// No active state - this game doesn't use state machine (old-style Lua game)
 					// OR the splash was popped intentionally (e.g., game uses direct _UPDATE/_DRAW)
@@ -112,6 +120,8 @@ func New(targetFPS int) *Engine {
 					if e.VM != nil && e.VM.L != nil {
 						_ = e.VM.CallUpdate(dtSec)
 						_ = e.VM.CallDraw()
+						// Clear stale justPressed flags at end of frame
+						input.ClearStaleJustPressed()
 					}
 				}
 			} else {
@@ -119,13 +129,14 @@ func New(targetFPS int) *Engine {
 				if e.VM != nil && e.VM.L != nil {
 					_ = e.VM.CallUpdate(dtSec)
 					_ = e.VM.CallDraw()
+					// Clear stale justPressed flags at end of frame
+					input.ClearStaleJustPressed()
 				}
 			}
 
-			// Step input state at the END of each frame
-			// This saves current frame's cur to prev, so next frame's btnp() can detect edges
-			// By doing this at the END, we capture all Set() calls that happened during the frame
-			input.Step()
+			// NOTE: input.Step() is now called at the START of each frame (above)
+			// This matches SDL behavior: Step() → Set buttons → HandleInput()
+			// This ensures btnp() edge detection works correctly
 
 			// Update debug stats (development mode only)
 			if e.devMode != nil && e.devMode.IsEnabled() {

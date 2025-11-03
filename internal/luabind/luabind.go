@@ -447,7 +447,8 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 	}))
 	L.SetField(rf, "btnp", L.NewFunction(func(L *lua.LState) int {
 		i := L.CheckInt(1)
-		L.Push(lua.LBool(input.Btnp(i)))
+		result := input.Btnp(i)
+		L.Push(lua.LBool(result))
 		return 1
 	}))
 	L.SetField(rf, "btnr", L.NewFunction(func(L *lua.LState) int {
@@ -455,6 +456,12 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		// Button release detection (not yet implemented in input package)
 		// For now, return false
 		L.Push(lua.LBool(false))
+		return 1
+	}))
+	
+	// Modifier keys
+	L.SetField(rf, "shift", L.NewFunction(func(L *lua.LState) int {
+		L.Push(lua.LBool(input.Shift()))
 		return 1
 	}))
 
@@ -565,7 +572,13 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 			case "noise":
 				audio.PlayNoise(sfx.Duration, sfx.Gain)
 			case "thrust":
-				audio.Thrust(action != "off")
+				// Use SFX-specific frequency and gain for thrust sounds
+				// This allows "move" and "boost" to have different sounds
+				if action != "off" {
+					audio.PlayThrust(true, sfx.Freq, sfx.Gain)
+				} else {
+					audio.PlayThrust(false, sfx.Freq, sfx.Gain)
+				}
 			case "stopall":
 				audio.StopAll()
 			}

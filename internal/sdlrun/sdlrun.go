@@ -69,21 +69,36 @@ func RunWindow(e *engine.Engine, scale int) error {
 					// Save screenshot
 					saveScreenshot(e)
 				}
+				
+				// Map keyboard keys to 11-button system
 				switch ev.Keysym.Sym {
-				case sdl.K_LEFT:
-					input.Set(input.BtnLeft, down)
-				case sdl.K_RIGHT:
-					input.Set(input.BtnRight, down)
-				case sdl.K_UP:
-					input.Set(input.BtnUp, down)
-				case sdl.K_DOWN:
-					input.Set(input.BtnDown, down)
-				case sdl.K_ESCAPE: // ESC also maps to Down button for pause
-					input.Set(input.BtnDown, down)
-				case sdl.K_z, sdl.K_RETURN: // O
-					input.Set(input.BtnO, down)
-				case sdl.K_x, sdl.K_SPACE: // X
+				// SELECT
+				case sdl.K_q, sdl.K_BACKSPACE:
+					input.Set(input.BtnSELECT, down)
+				// START
+				case sdl.K_RETURN, sdl.K_ESCAPE:
+					input.Set(input.BtnSTART, down)
+				// Directions
+				case sdl.K_UP, sdl.K_w:
+					input.Set(input.BtnUP, down)
+				case sdl.K_DOWN, sdl.K_s:
+					input.Set(input.BtnDOWN, down)
+				case sdl.K_LEFT, sdl.K_a:
+					input.Set(input.BtnLEFT, down)
+				case sdl.K_RIGHT, sdl.K_d:
+					input.Set(input.BtnRIGHT, down)
+				// Action buttons
+				case sdl.K_z, sdl.K_SPACE:
+					input.Set(input.BtnA, down)
+				case sdl.K_x:
+					input.Set(input.BtnB, down)
+				case sdl.K_c:
 					input.Set(input.BtnX, down)
+				case sdl.K_v:
+					input.Set(input.BtnY, down)
+				// TURBO (modifier)
+				case sdl.K_LSHIFT, sdl.K_RSHIFT:
+					input.Set(input.BtnTURBO, down)
 				}
 			}
 		}

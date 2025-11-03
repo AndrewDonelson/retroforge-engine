@@ -7,7 +7,7 @@
   "fullManifest": {
     "version": "1.0",
     "title": "Multiplayer Platformer Demo",
-    "author": "RetroForge Team",
+    "author": "RetroForge",
     "description": "Simple platformer demonstrating multiplayer sync",
     "entry": "main.lua",
     "palette": "SNES 50",
