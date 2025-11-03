@@ -1,0 +1,186 @@
+//go:build !js
+
+package audio
+
+import (
+	"fmt"
+	"math"
+	"sync"
+	"strings"
+	"time"
+)
+
+// Shared audio state and types (used by both SDL and Oto implementations)
+type voice struct {
+	kind   string // "sine", "noise", or "loop"
+	freq   float64
+	gain   float64
+	phase  float64
+	tleft  float64 // seconds left; <=0 for loop (e.g., thrust)
+}
+
+var (
+	mu            sync.Mutex
+	voices        []*voice
+	activeThrusts = make(map[string]*voice)
+	thrustOn      bool
+)
+
+// simple RNG
+var seed uint32 = 1
+
+func randFloat() float64 {
+	seed = 1664525*seed + 1013904223
+	return float64(seed&0xFFFF) / 65535.0
+}
+
+func PlaySine(freq, dur, gain float64) {
+	mu.Lock()
+	defer mu.Unlock()
+	voices = append(voices, &voice{kind: "sine", freq: freq, gain: gain, tleft: dur})
+}
+
+func PlayNoise(dur, gain float64) {
+	mu.Lock()
+	defer mu.Unlock()
+	voices = append(voices, &voice{kind: "noise", gain: gain, tleft: dur})
+}
+
+// Thrust on/off: looped low buzz (uses default 110 Hz, 0.2 gain)
+func Thrust(on bool) {
+	PlayThrust(on, 110, 0.2)
+}
+
+// PlayThrust plays a looped thrust sound with custom frequency and gain
+func PlayThrust(on bool, freq, gain float64) {
+	mu.Lock()
+	defer mu.Unlock()
+	key := fmt.Sprintf("%.0f:%.2f", freq, gain) // Create unique key for freq:gain combo
+	_, exists := activeThrusts[key]
+
+	if on && !exists {
+		v := &voice{kind: "loop", freq: freq, gain: gain, tleft: -1}
+		voices = append(voices, v)
+		activeThrusts[key] = v
+		if !thrustOn {
+			thrustOn = true // Track if any thrust is on
+		}
+	} else if !on && exists {
+		// Stop this specific thrust
+		n := voices[:0]
+		for _, v := range voices {
+			if v == activeThrusts[key] {
+				continue // Skip this one
+			}
+			n = append(n, v)
+		}
+		voices = n
+		delete(activeThrusts, key)
+		// If no more thrusts, clear the flag
+		if len(activeThrusts) == 0 {
+			thrustOn = false
+		}
+	}
+}
+
+// StopAll immediately stops all current sounds
+func StopAll() {
+	mu.Lock()
+	voices = []*voice{}
+	activeThrusts = make(map[string]*voice)
+	thrustOn = false
+	mu.Unlock()
+}
+
+func float32ToS16Bytes(f []float32) []byte {
+	b := make([]byte, len(f)*2)
+	for i, v := range f {
+		// clamp and convert
+		if v > 1 {
+			v = 1
+		} else if v < -1 {
+			v = -1
+		}
+		s := int16(v * 32767)
+		b[i*2+0] = byte(s)
+		b[i*2+1] = byte(uint16(s) >> 8)
+	}
+	return b
+}
+
+// --- Simple note parser and sequence player ---
+
+var noteOffsets = map[string]int{
+	"C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6,
+	"G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11,
+}
+
+func noteToFreq(note string, defaultOctave int) (float64, bool) {
+	// Formats: "1G#2" (octave-note-len) or "G#2" (note-len) or "R2" (rest)
+	s := strings.ToUpper(strings.TrimSpace(note))
+	if len(s) == 0 {
+		return 0, false
+	}
+	if s[0] == 'R' {
+		return 0, true
+	}
+	octave := defaultOctave
+	pos := 0
+	if s[0] >= '0' && s[0] <= '9' {
+		octave = int(s[0] - '0')
+		pos++
+	}
+	if pos >= len(s) {
+		return 0, false
+	}
+	n := string(s[pos])
+	pos++
+	if pos < len(s) && s[pos] == '#' {
+		n += "#"
+		pos++
+	}
+	off, ok := noteOffsets[n]
+	if !ok {
+		return 0, false
+	}
+	// Compute frequency using A4 reference
+	semitone := (octave-4)*12 + (off - 9)
+	f := 440.0 * math.Pow(2, float64(semitone)/12.0)
+	return f, true
+}
+
+// PlayNotes plays a sequence of tokens at bpm with given gain.
+// Tokens like: 1G#2, G2, R1 (rest), default octave 4 if not prefixed.
+func PlayNotes(tokens []string, bpm float64, gain float64) {
+	if bpm <= 0 {
+		bpm = 120
+	}
+	beat := 60.0 / bpm
+	go func() {
+		for _, t := range tokens {
+			s := strings.ToUpper(strings.TrimSpace(t))
+			if s == "" {
+				continue
+			}
+			// length = last digit if present
+			length := 1
+			if last := s[len(s)-1]; last >= '0' && last <= '9' {
+				length = int(last - '0')
+				s = s[:len(s)-1]
+			}
+			dur := float64(length) * beat
+			if s == "R" {
+				time.Sleep(time.Duration(dur*1000) * time.Millisecond)
+				continue
+			}
+			if f, ok := noteToFreq(s, 4); ok {
+				PlaySine(f, dur*0.95, gain)
+				time.Sleep(time.Duration(dur*1000) * time.Millisecond)
+			} else {
+				// unknown token, skip beat
+				time.Sleep(time.Duration(beat*1000) * time.Millisecond)
+			}
+		}
+	}()
+}
+

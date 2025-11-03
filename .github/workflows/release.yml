@@ -3,27 +3,64 @@ name: Build and Release
 on:
   pull_request:
     branches:
-      - main
       - production
     types: [closed]
   workflow_dispatch:
     inputs:
       version_type:
-        description: 'Version type (alpha or beta)'
+        description: 'Version type (alpha, beta, or prod)'
         required: true
         default: 'alpha'
         type: choice
         options:
           - alpha
           - beta
+          - prod
 
 jobs:
-  build-and-release:
+  # First job: Build on each platform natively
+  build:
     # Run on merged PRs to production branch OR manual workflow dispatch
     if: |
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'production') ||
       github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            output: retroforge-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            output: retroforge-linux-arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            output: retroforge-windows-amd64.exe
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+            output: retroforge-windows-arm64.exe
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            output: retroforge-macos-amd64
+            cgo: "1"
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            output: retroforge-macos-arm64
+            cgo: "1"
+          - os: ubuntu-latest
+            goos: js
+            goarch: wasm
+            output: retroforge.wasm
+    
+    runs-on: ${{ matrix.os }}
     
     steps:
       - name: Checkout code
@@ -34,10 +71,57 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Install SDL2 dependencies (Linux)
+      - name: Build
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
+          LDFLAGS="-s -w"
+          if [ "${{ matrix.cgo }}" = "1" ]; then
+            CGO_ENABLED=1 go build -ldflags "$LDFLAGS" -o ${{ matrix.output }} ./cmd/retroforge
+          else
+            go build -ldflags "$LDFLAGS" -o ${{ matrix.output }} ./cmd/retroforge
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: ${{ matrix.output }}
+          if-no-files-found: error
+
+  # Second job: Copy wasm_exec.js for WASM builds
+  build-wasm-extras:
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'production') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Copy wasm_exec.js
+        run: |
+          cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" .
+
+      - name: Upload wasm_exec.js
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm_exec.js
+          path: wasm_exec.js
+
+  # Third job: Create version file and release
+  release:
+    needs: [build, build-wasm-extras]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Determine version type
         id: version_type
@@ -49,18 +133,58 @@ jobs:
             echo "type=alpha" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build all platforms
-        working-directory: ${{ github.workspace }}
-        run: |
-          chmod +x build-production.sh
-          ./build-production.sh ${{ steps.version_type.outputs.type }}
-
-      - name: Get version
+      - name: Generate version
         id: version
         run: |
-          VERSION=$(cat bin/VERSION.txt)
+          # Get current date/time in format: YEAR.MM.DD.HHMM
+          NOW=$(date -u +"%Y.%m.%d.%H%M")
+          
+          # Determine version type suffix
+          VERSION_TYPE="${{ steps.version_type.outputs.type }}"
+          if [ "$VERSION_TYPE" == "prod" ]; then
+            VERSION="${NOW}"
+          else
+            VERSION="${NOW}-${VERSION_TYPE}"
+          fi
+          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Built version: $VERSION"
+          echo "Generated version: $VERSION"
+          
+          # Create VERSION.txt
+          mkdir -p artifacts
+          echo "$VERSION" > artifacts/VERSION.txt
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          # Move all binaries to root of artifacts directory
+          find artifacts -type f -name "retroforge*" -exec mv {} artifacts/ \;
+          find artifacts -type f -name "wasm_exec.js" -exec mv {} artifacts/ \;
+          
+          # Remove empty subdirectories
+          find artifacts -type d -empty -delete
+          
+          # Rename binaries to include version
+          cd artifacts
+          for file in retroforge-*; do
+            if [ -f "$file" ]; then
+              # Extract platform from filename (e.g., "linux-amd64" from "retroforge-linux-amd64")
+              platform="${file#retroforge-}"
+              # Add version to filename
+              mv "$file" "retroforge-${{ steps.version.outputs.version }}-${platform}"
+            fi
+          done
+          
+          # Handle the wasm file separately (no platform suffix)
+          if [ -f "retroforge.wasm" ]; then
+            mv "retroforge.wasm" "retroforge-${{ steps.version.outputs.version }}.wasm"
+          fi
+          
+          ls -la
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -74,9 +198,9 @@ jobs:
             
             Binaries for all supported platforms:
             
-            - **Linux (amd64)**: `retroforge-${{ steps.version.outputs.version }}`
+            - **Linux (amd64)**: `retroforge-${{ steps.version.outputs.version }}-linux-amd64`
             - **Linux (arm64)**: `retroforge-${{ steps.version.outputs.version }}-linux-arm64`
-            - **Windows (amd64)**: `retroforge-${{ steps.version.outputs.version }}.exe`
+            - **Windows (amd64)**: `retroforge-${{ steps.version.outputs.version }}-windows-amd64.exe`
             - **Windows (arm64)**: `retroforge-${{ steps.version.outputs.version }}-windows-arm64.exe`
             - **macOS (amd64)**: `retroforge-${{ steps.version.outputs.version }}-macos-amd64`
             - **macOS (arm64/Apple Silicon)**: `retroforge-${{ steps.version.outputs.version }}-macos-arm64`
@@ -92,16 +216,11 @@ jobs:
             ### Usage
             
             ```bash
-            ./retroforge-${{ steps.version.outputs.version }}-[platform] path/to/game.rf
+            ./retroforge-${{ steps.version.outputs.version }}-[platform] -cart path/to/game.rf -window
             ```
           files: |
-            bin/retroforge-*.wasm
-            bin/retroforge-*.exe
-            bin/retroforge-*
-            bin/wasm_exec.js
-            bin/VERSION.txt
+            artifacts/*
           draft: false
-          prerelease: ${{ steps.version_type.outputs.type == 'alpha' }}
+          prerelease: ${{ steps.version_type.outputs.type != 'prod' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

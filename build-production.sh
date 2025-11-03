@@ -51,18 +51,24 @@ build_platform() {
     
     echo -e "${YELLOW}Building ${GOOS}/${GOARCH}...${NC}"
     
-    # CGO is required for SDL (native audio). 
-    # Cross-compilation to Windows/macOS from Linux may fail.
-    # Linux (amd64/arm64) and WASM builds work reliably.
-    CGO_ENABLED=1 GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags "${LDFLAGS}" -o "${BIN_DIR}/${FILENAME}" ${PKG}
+    # Ebiten is mostly pure Go, but macOS requires CGO for GLFW bindings
+    # Windows and Linux can cross-compile without CGO
+    local CGO_FLAG=""
+    if [ "${GOOS}" = "darwin" ]; then
+        CGO_FLAG="CGO_ENABLED=1"
+        echo -e "${YELLOW}  Note: macOS requires CGO for GLFW bindings${NC}"
+    fi
+    
+    ${CGO_FLAG} GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags "${LDFLAGS}" -o "${BIN_DIR}/${FILENAME}" ${PKG}
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Built ${FILENAME}${NC}"
         return 0
     else
-        echo -e "${YELLOW}⚠ Failed to build ${GOOS}/${GOARCH}${NC}"
-        echo -e "${YELLOW}  Note: SDL/CGO cross-compilation may not work.${NC}"
-        echo -e "${YELLOW}  This is expected for Windows/macOS from Linux.${NC}"
+        echo -e "${RED}✗ Failed to build ${GOOS}/${GOARCH}${NC}"
+        if [ "${GOOS}" = "darwin" ]; then
+            echo -e "${YELLOW}  macOS builds require CGO. Cross-compilation may need macOS toolchain.${NC}"
+        fi
         return 1
     fi
 }
@@ -82,32 +88,24 @@ else
     echo -e "${YELLOW}Skipping Linux ARM64 (requires cross-compilation setup)${NC}"
 fi
 
-# Build for Windows (amd64) - cross-compilation with CGO is complex
+# Build for Windows (amd64) - Pure Go, cross-compilation works!
 if build_platform "windows" "amd64" ".exe"; then
     BUILD_SUCCESS=$((BUILD_SUCCESS + 1))
-else
-    echo -e "${YELLOW}Skipping Windows amd64 (CGO cross-compilation not supported)${NC}"
 fi
 
-# Build for Windows (arm64) - cross-compilation with CGO is complex
+# Build for Windows (arm64) - Pure Go, cross-compilation works!
 if build_platform "windows" "arm64" "-windows-arm64.exe"; then
     BUILD_SUCCESS=$((BUILD_SUCCESS + 1))
-else
-    echo -e "${YELLOW}Skipping Windows ARM64 (CGO cross-compilation not supported)${NC}"
 fi
 
-# Build for macOS (amd64) - cross-compilation with CGO is complex
+# Build for macOS (amd64) - Pure Go, cross-compilation works!
 if build_platform "darwin" "amd64" "-macos-amd64"; then
     BUILD_SUCCESS=$((BUILD_SUCCESS + 1))
-else
-    echo -e "${YELLOW}Skipping macOS amd64 (CGO cross-compilation not supported)${NC}"
 fi
 
-# Build for macOS (arm64 / Apple Silicon) - cross-compilation with CGO is complex
+# Build for macOS (arm64 / Apple Silicon) - Pure Go, cross-compilation works!
 if build_platform "darwin" "arm64" "-macos-arm64"; then
     BUILD_SUCCESS=$((BUILD_SUCCESS + 1))
-else
-    echo -e "${YELLOW}Skipping macOS ARM64 (CGO cross-compilation not supported)${NC}"
 fi
 
 # Build WASM
@@ -177,7 +175,7 @@ echo "Built binaries:"
 ls -lh "${BIN_DIR}"/* 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}'
 echo ""
 if [ ${BUILD_SUCCESS} -gt 0 ]; then
-    echo -e "${GREEN}Build complete! (Some platforms may have been skipped due to CGO limitations)${NC}"
+    echo -e "${GREEN}Build complete! All platforms built successfully (Pure Go - no CGO!)${NC}"
 else
     echo -e "${RED}No platforms built successfully!${NC}"
     exit 1

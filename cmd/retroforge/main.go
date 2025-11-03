@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
+	"github.com/AndrewDonelson/retroforge-engine/internal/ebitenrun"
 	"github.com/AndrewDonelson/retroforge-engine/internal/engine"
-	"github.com/AndrewDonelson/retroforge-engine/internal/sdlrun"
 )
 
 func packDir(dir, out string) error {
@@ -141,7 +141,7 @@ func main() {
 			panic(err)
 		}
 		if *window {
-			if err := sdlrun.RunWindow(e, *scale); err != nil {
+			if err := ebitenrun.RunWindow(e, *scale); err != nil {
 				panic(err)
 			}
 			return
@@ -168,7 +168,7 @@ func main() {
 		}
 		if *window {
 			println("Development mode: Hot reload enabled. Edit files in", *folder)
-			if err := sdlrun.RunWindow(e, *scale); err != nil {
+			if err := ebitenrun.RunWindow(e, *scale); err != nil {
 				panic(err)
 			}
 			return

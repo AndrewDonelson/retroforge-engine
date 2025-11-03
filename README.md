@@ -41,7 +41,7 @@ RetroForge Engine is the core runtime engine that powers the RetroForge fantasy 
 │                                                  │
 │  ┌──────────┐  ┌──────────────────────────┐    │
 │  │ Network │  │     Platform Layer        │    │
-│  │ (WebRTC)│  │    (SDL2/OpenGL/WASM)      │    │
+│  │ (WebRTC)│  │    (Ebiten/WASM)            │    │
 │  └──────────┘  └──────────────────────────┘    │
 └─────────────────────────────────────────────────┘
 ```
@@ -51,8 +51,8 @@ RetroForge Engine is the core runtime engine that powers the RetroForge fantasy 
 ### Prerequisites
 
 - Go 1.23+
-- SDL2 development libraries (for desktop builds)
-- CGO enabled
+- Pure Go - no CGO or external dependencies required!
+- Cross-compilation works out of the box
 
 ### Installation
 
