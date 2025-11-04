@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AndrewDonelson/retroforge-engine/internal/animation"
 	"github.com/AndrewDonelson/retroforge-engine/internal/app"
 	"github.com/AndrewDonelson/retroforge-engine/internal/audio"
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
@@ -38,6 +39,26 @@ type DevStats struct {
 	ReloadCount int
 }
 
+// AnimationUpdater provides a way to update animation states for direct sprites
+type AnimationUpdater struct {
+	animationStates map[string]*animation.AnimationState
+	spritesMap      *cartio.SpriteMap
+}
+
+// UpdateAnimations updates all animation states for direct sprites
+func (au *AnimationUpdater) UpdateAnimations(deltaTime time.Duration) {
+	deltaTimeMs := int64(deltaTime / time.Millisecond)
+	for spriteName, animState := range au.animationStates {
+		if animState != nil && animState.Playing && !animState.Paused {
+			if sprite, ok := (*au.spritesMap)[spriteName]; ok {
+				if sprite.Type == cartio.SpriteTypeAnimation {
+					animation.UpdateAnimationState(animState, &sprite, deltaTimeMs)
+				}
+			}
+		}
+	}
+}
+
 // Register attaches rf.* drawing functions to the Lua state.
 func Register(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, netMgr *network.NetworkManager) {
 	state := NewState()
@@ -65,6 +86,14 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 
 	// Create pool manager for automatic sprite pooling
 	poolManager := spritepool.NewPoolManager()
+	
+	// Track animation states for non-pooled sprite drawing (for direct rf.spr() calls)
+	// Key: sprite name, Value: animation state
+	animationStates := make(map[string]*animation.AnimationState)
+	
+	// Note: Animation states for direct sprites are updated lazily in rf.spr() calls
+	// For pooled sprites, animations are updated in pool.Update() which is called in engine loop
+	// For better accuracy, we could expose animUpdater to engine, but lazy update works for now
 
 	// Register existing sprites that meet pooling criteria
 	for spriteName, spriteData := range spritesMap {
@@ -783,6 +812,7 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		tbl.RawSetString("isUI", lua.LBool(sprite.IsUI))
 		tbl.RawSetString("lifetime", lua.LNumber(sprite.Lifetime))
 		tbl.RawSetString("maxSpawn", lua.LNumber(sprite.MaxSpawn))
+		tbl.RawSetString("type", lua.LString(string(sprite.Type)))
 
 		mountPointsTbl := L.NewTable()
 		for i, mp := range sprite.MountPoints {
@@ -803,23 +833,155 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		return 1
 	}))
 
-	// Sprite drawing: rf.spr(name, x, y, [flip_x, flip_y])
-	// Draws a sprite by name at position (x, y) with optional flipping
+	// Sprite drawing: rf.spr(name, x, y, [frameNameOrAnimation, flip_x, flip_y])
+	// Draws a sprite by name at position (x, y)
+	// For static sprites: rf.spr(name, x, y, [flip_x, flip_y])
+	// For frames sprites: rf.spr(name, x, y, frameName, [flip_x, flip_y])
+	// For animation sprites: rf.spr(name, x, y, [animationName, flip_x, flip_y]) - uses active animation state
 	L.SetField(rf, "spr", L.NewFunction(func(L *lua.LState) int {
 		name := L.CheckString(1)
 		x := L.CheckInt(2)
 		y := L.CheckInt(3)
-		flipX := L.OptBool(4, false)
-		flipY := L.OptBool(5, false)
+		
+		// Parse optional arguments - could be frameName/animation, flipX, or just flipX
+		var frameNameOrAnim string
+		var flipX, flipY bool
+		
+		argCount := L.GetTop()
+		if argCount >= 4 {
+			// Check if 4th arg is bool (flipX) or string (frameName/animation)
+			arg4 := L.Get(4)
+			if arg4.Type() == lua.LTString {
+				frameNameOrAnim = L.CheckString(4)
+				flipX = L.OptBool(5, false)
+				flipY = L.OptBool(6, false)
+			} else {
+				flipX = L.OptBool(4, false)
+				flipY = L.OptBool(5, false)
+			}
+		} else {
+			flipX = L.OptBool(4, false)
+			flipY = L.OptBool(5, false)
+		}
 
 		sprite, ok := (*spriteMapPtr)[name]
 		if !ok {
 			return 0 // Sprite not found, do nothing
 		}
 
+		var pixels [][]int
+		var err error
+
+		// Handle different sprite types
+		switch sprite.Type {
+		case cartio.SpriteTypeStatic:
+			// Static sprite - use pixels directly
+			pixels = sprite.Pixels
+			
+		case cartio.SpriteTypeFrames:
+			// Frames sprite - require frame name
+			if frameNameOrAnim == "" {
+				L.RaiseError("frames sprite '%s' requires frame name parameter", name)
+				return 0
+			}
+			pixels, err = sprite.GetFramePixels(frameNameOrAnim)
+			if err != nil {
+				L.RaiseError("frame '%s' not found in sprite '%s': %v", frameNameOrAnim, name, err)
+				return 0
+			}
+			
+		case cartio.SpriteTypeAnimation:
+			// Animation sprite - use active animation state or specified animation
+			if frameNameOrAnim != "" {
+				// Specified animation name - use it
+				anim, err := sprite.GetAnimation(frameNameOrAnim)
+				if err != nil {
+					L.RaiseError("animation '%s' not found in sprite '%s': %v", frameNameOrAnim, name, err)
+					return 0
+				}
+				// Get or create animation state for this sprite
+				animState, exists := animationStates[name]
+				if !exists || animState.AnimationName != frameNameOrAnim {
+					animState = animation.NewAnimationState(name)
+					if err := animation.PlayAnimation(animState, &sprite, frameNameOrAnim); err != nil {
+						L.RaiseError("failed to play animation '%s': %v", frameNameOrAnim, err)
+						return 0
+					}
+					animationStates[name] = animState
+				}
+				// Get current frame from animation state
+				currentFrameName := animation.GetCurrentFrameName(animState)
+				if currentFrameName == "" {
+					// Fallback to first frame if no current frame
+					if len(anim.FrameRefs) > 0 {
+						currentFrameName = anim.FrameRefs[0]
+					}
+				}
+				if currentFrameName != "" {
+					pixels, err = sprite.GetFramePixels(currentFrameName)
+					if err != nil {
+						L.RaiseError("frame '%s' not found: %v", currentFrameName, err)
+						return 0
+					}
+				} else {
+					L.RaiseError("animation '%s' has no frames", frameNameOrAnim)
+					return 0
+				}
+			} else {
+				// No animation specified - check if there's an active animation state
+				animState, exists := animationStates[name]
+				if exists && animState.Playing && animState.Sequence != nil {
+					// Update animation state (approximate delta time - this is called during draw)
+					// For more accurate timing, animations should be updated in engine update loop
+					// For now, we'll update with a small delta to ensure frames advance
+					// Note: This is a fallback - proper update should happen in engine loop
+					animation.UpdateAnimationState(animState, &sprite, 16) // ~60fps = ~16ms per frame
+					
+					currentFrameName := animation.GetCurrentFrameName(animState)
+					if currentFrameName != "" {
+						pixels, err = sprite.GetFramePixels(currentFrameName)
+						if err != nil {
+							// Fallback to first frame if current frame not found
+							if len(animState.Sequence.FrameRefs) > 0 {
+								pixels, err = sprite.GetFramePixels(animState.Sequence.FrameRefs[0])
+							}
+						}
+					}
+				}
+				// If no active animation or frame not found, use first frame from first animation
+				if pixels == nil {
+					if len(sprite.Animations) > 0 && len(sprite.Animations[0].FrameRefs) > 0 {
+						pixels, err = sprite.GetFramePixels(sprite.Animations[0].FrameRefs[0])
+					}
+				}
+				if pixels == nil || err != nil {
+					L.RaiseError("sprite '%s' has no active animation or default frame", name)
+					return 0
+				}
+			}
+			
+		default:
+			// Default to static behavior for backward compatibility
+			if sprite.Pixels != nil && len(sprite.Pixels) > 0 {
+				pixels = sprite.Pixels
+			} else {
+				return 0 // No pixels to draw
+			}
+		}
+
+		if pixels == nil {
+			return 0 // No pixels to draw
+		}
+
 		// Draw sprite pixels
-		for sy := 0; sy < sprite.Height; sy++ {
-			for sx := 0; sx < sprite.Width; sx++ {
+		for sy := 0; sy < len(pixels); sy++ {
+			if sy >= sprite.Height {
+				break
+			}
+			for sx := 0; sx < len(pixels[sy]); sx++ {
+				if sx >= sprite.Width {
+					break
+				}
 				// Calculate source coordinates with flipping
 				srcX := sx
 				srcY := sy
@@ -830,7 +992,12 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 					srcY = sprite.Height - 1 - sy
 				}
 
-				colorIdx := sprite.Pixels[srcY][srcX]
+				// Ensure source coordinates are within bounds
+				if srcX < 0 || srcY < 0 || srcX >= len(pixels[srcY]) || srcY >= len(pixels) {
+					continue
+				}
+
+				colorIdx := pixels[srcY][srcX]
 				if colorIdx >= 0 { // -1 is transparent
 					c := colorByIndexRemapped(colorIdx)
 					r.PSet(x+sx, y+sy, color.RGBA{c[0], c[1], c[2], c[3]})
@@ -906,13 +1073,11 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		name := L.CheckString(1)
 		width := L.CheckInt(2)
 		height := L.CheckInt(3)
+		isUI := L.OptBool(4, true) // Default to true for UI sprite
 
-		if width <= 0 || height <= 0 {
-			L.RaiseError("sprite width and height must be positive")
-			return 0
-		}
-		if width > 256 || height > 256 {
-			L.RaiseError("sprite dimensions cannot exceed 256x256")
+		// Validate sprite size using new rules
+		if err := cartio.ValidateSpriteSize(width, height, isUI); err != nil {
+			L.RaiseError("%s", err.Error())
 			return 0
 		}
 
@@ -930,9 +1095,10 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 			Width:        width,
 			Height:       height,
 			Pixels:       pixels,
+			Type:         cartio.SpriteTypeStatic, // Default to static sprite
 			UseCollision: false,
 			MountPoints:  []cartio.MountPoint{},
-			IsUI:         true, // Default true
+			IsUI:         isUI, // Use provided value or default true
 			Lifetime:     0,    // 0 = no lifetime limit
 			MaxSpawn:     0,    // 0 = no spawn limit
 		}
@@ -959,12 +1125,366 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		}
 		tbl.RawSetString("pixels", pixelsTbl)
 		tbl.RawSetString("useCollision", lua.LBool(false))
-		tbl.RawSetString("isUI", lua.LBool(true))
+		tbl.RawSetString("isUI", lua.LBool(isUI))
 		tbl.RawSetString("lifetime", lua.LNumber(0))
 		tbl.RawSetString("maxSpawn", lua.LNumber(0))
 		tbl.RawSetString("mountPoints", L.NewTable())
 
 		L.Push(tbl)
+		return 1
+	}))
+
+	// rf.newSpriteFrames(name, width, height, [isUI]) -> creates a multi-frame sprite
+	L.SetField(rf, "newSpriteFrames", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+		width := L.CheckInt(2)
+		height := L.CheckInt(3)
+		isUI := L.OptBool(4, true) // Default to true for UI sprite
+
+		// Validate sprite size
+		if err := cartio.ValidateSpriteSize(width, height, isUI); err != nil {
+			L.RaiseError("%s", err.Error())
+			return 0
+		}
+
+		// Initialize pixels array (for frame reference dimensions)
+		pixels := make([][]int, height)
+		for y := range pixels {
+			pixels[y] = make([]int, width)
+			for x := range pixels[y] {
+				pixels[y][x] = -1 // Transparent
+			}
+		}
+
+		// Create new frames sprite
+		newSprite := cartio.SpriteData{
+			Width:        width,
+			Height:       height,
+			Type:         cartio.SpriteTypeFrames,
+			Frames:       []cartio.SpriteFrame{},
+			UseCollision: false,
+			MountPoints:  []cartio.MountPoint{},
+			IsUI:         isUI,
+			Lifetime:     0,
+			MaxSpawn:     0,
+		}
+
+		// Add to sprite map
+		(*spriteMapPtr)[name] = newSprite
+
+		// Return sprite table
+		tbl := L.NewTable()
+		tbl.RawSetString("width", lua.LNumber(width))
+		tbl.RawSetString("height", lua.LNumber(height))
+		tbl.RawSetString("type", lua.LString("frames"))
+		tbl.RawSetString("isUI", lua.LBool(isUI))
+
+		L.Push(tbl)
+		return 1
+	}))
+
+	// rf.addSpriteFrame(spriteName, frameName, pixels) -> adds a frame to a frames sprite
+	L.SetField(rf, "addSpriteFrame", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+		frameName := L.CheckString(2)
+		pixelsTbl := L.CheckTable(3)
+
+		// Validate frame name
+		if err := cartio.ValidateFrameName(frameName); err != nil {
+			L.RaiseError("invalid frame name: %v", err)
+			return 0
+		}
+
+		sprite, ok := (*spriteMapPtr)[spriteName]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", spriteName)
+			return 0
+		}
+
+		// Ensure sprite is frames or animation type
+		if sprite.Type != cartio.SpriteTypeFrames && sprite.Type != cartio.SpriteTypeAnimation {
+			L.RaiseError("sprite '%s' is not a frames or animation sprite (type: %s)", spriteName, sprite.Type)
+			return 0
+		}
+
+		// Check for duplicate frame name
+		for _, frame := range sprite.Frames {
+			if frame.Name == frameName {
+				L.RaiseError("frame '%s' already exists in sprite '%s'", frameName, spriteName)
+				return 0
+			}
+		}
+
+		// Convert Lua table to pixels array
+		pixels := make([][]int, sprite.Height)
+		pixelsTbl.ForEach(func(key, value lua.LValue) {
+			rowIdx := int(lua.LVAsNumber(key)) - 1 // Lua is 1-indexed
+			if rowIdx >= 0 && rowIdx < sprite.Height {
+				rowTbl, ok := value.(*lua.LTable)
+				if !ok {
+					return
+				}
+				pixels[rowIdx] = make([]int, sprite.Width)
+				rowTbl.ForEach(func(colKey, colValue lua.LValue) {
+					colIdx := int(lua.LVAsNumber(colKey)) - 1
+					if colIdx >= 0 && colIdx < sprite.Width {
+						pixels[rowIdx][colIdx] = int(lua.LVAsNumber(colValue))
+					}
+				})
+			}
+		})
+
+		// Validate pixels dimensions
+		if len(pixels) != sprite.Height {
+			L.RaiseError("pixels array height (%d) does not match sprite height (%d)", len(pixels), sprite.Height)
+			return 0
+		}
+		for i, row := range pixels {
+			if len(row) != sprite.Width {
+				L.RaiseError("row %d width (%d) does not match sprite width (%d)", i, len(row), sprite.Width)
+				return 0
+			}
+		}
+
+		// Add frame
+		newFrame := cartio.SpriteFrame{
+			Name:     frameName,
+			Pixels:   pixels,
+			Duration: 100, // Default 100ms
+		}
+		sprite.Frames = append(sprite.Frames, newFrame)
+		(*spriteMapPtr)[spriteName] = sprite
+
+		return 0
+	}))
+
+	// rf.addSpriteAnimation(spriteName, animName, frameRefs, [speed], [loop], [loopType]) -> adds animation to sprite
+	L.SetField(rf, "addSpriteAnimation", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+		animName := L.CheckString(2)
+		frameRefsTbl := L.CheckTable(3)
+		speed := L.OptNumber(4, 1.0)
+		loop := L.OptBool(5, true)
+		loopType := L.OptString(6, "forward")
+
+		// Validate animation name
+		if err := cartio.ValidateFrameName(animName); err != nil {
+			L.RaiseError("invalid animation name: %v", err)
+			return 0
+		}
+
+		// Validate loop type
+		if loopType != "forward" && loopType != "reverse" && loopType != "pingpong" {
+			L.RaiseError("invalid loopType '%s', must be 'forward', 'reverse', or 'pingpong'", loopType)
+			return 0
+		}
+
+		sprite, ok := (*spriteMapPtr)[spriteName]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", spriteName)
+			return 0
+		}
+
+		// Ensure sprite is animation type
+		if sprite.Type != cartio.SpriteTypeAnimation {
+			L.RaiseError("sprite '%s' is not an animation sprite (type: %s)", spriteName, sprite.Type)
+			return 0
+		}
+
+		// Check for duplicate animation name
+		for _, anim := range sprite.Animations {
+			if anim.Name == animName {
+				L.RaiseError("animation '%s' already exists in sprite '%s'", animName, spriteName)
+				return 0
+			}
+		}
+
+		// Convert frame refs table to slice
+		var frameRefs []string
+		frameRefsTbl.ForEach(func(key, value lua.LValue) {
+			if str, ok := value.(lua.LString); ok {
+				frameRefs = append(frameRefs, string(str))
+			}
+		})
+
+		if len(frameRefs) == 0 {
+			L.RaiseError("animation must have at least one frame reference")
+			return 0
+		}
+
+		// Validate frame references exist
+		frameNames := make(map[string]bool)
+		for _, frame := range sprite.Frames {
+			frameNames[frame.Name] = true
+		}
+		for _, frameRef := range frameRefs {
+			if !frameNames[frameRef] {
+				L.RaiseError("frame reference '%s' not found in sprite '%s'", frameRef, spriteName)
+				return 0
+			}
+		}
+
+		// Validate speed
+		speedFloat := float64(speed)
+		if speedFloat <= 0 {
+			speedFloat = 1.0
+		}
+
+		// Add animation
+		newAnim := cartio.AnimationSequence{
+			Name:      animName,
+			FrameRefs: frameRefs,
+			Speed:     speedFloat,
+			Loop:      loop,
+			LoopType:  loopType,
+		}
+		sprite.Animations = append(sprite.Animations, newAnim)
+		(*spriteMapPtr)[spriteName] = sprite
+
+		return 0
+	}))
+
+	// Helper function to update animation states for all instances of a sprite
+	updateSpriteAnimations := func(spriteName string, updateFunc func(*animation.AnimationState)) {
+		// Update direct animation state (for non-pooled sprites)
+		if animState, exists := animationStates[spriteName]; exists {
+			updateFunc(animState)
+		}
+
+		// Update all active pool instances
+		poolManager.ForEachActiveInstance(spriteName, func(instance *spritepool.SpriteInstance) {
+			if instance.AnimationState != nil {
+				updateFunc(instance.AnimationState)
+			}
+		})
+	}
+
+	// rf.playAnimation(spriteName, animationName) -> starts animation for all instances
+	L.SetField(rf, "playAnimation", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+		animationName := L.CheckString(2)
+
+		sprite, ok := (*spriteMapPtr)[spriteName]
+		if !ok {
+			L.RaiseError("sprite '%s' not found", spriteName)
+			return 0
+		}
+
+		if sprite.Type != cartio.SpriteTypeAnimation {
+			L.RaiseError("sprite '%s' is not an animation sprite", spriteName)
+			return 0
+		}
+
+		updateSpriteAnimations(spriteName, func(animState *animation.AnimationState) {
+			if err := animation.PlayAnimation(animState, &sprite, animationName); err != nil {
+				// Log error but don't fail - individual instances might fail
+				if devModePtr != nil {
+					devModePtr.AddDebugLog(fmt.Sprintf("Failed to play animation '%s' on sprite '%s': %v", animationName, spriteName, err))
+				}
+			}
+		})
+
+		// Also ensure direct state exists for rf.spr() calls
+		animState, exists := animationStates[spriteName]
+		if !exists {
+			animState = animation.NewAnimationState(spriteName)
+			animationStates[spriteName] = animState
+		}
+		if err := animation.PlayAnimation(animState, &sprite, animationName); err != nil {
+			L.RaiseError("failed to play animation '%s': %v", animationName, err)
+			return 0
+		}
+
+		return 0
+	}))
+
+	// rf.pauseAnimation(spriteName) -> pauses animation for all instances
+	L.SetField(rf, "pauseAnimation", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+
+		updateSpriteAnimations(spriteName, func(animState *animation.AnimationState) {
+			animation.PauseAnimation(animState)
+		})
+
+		return 0
+	}))
+
+	// rf.resumeAnimation(spriteName) -> resumes paused animation for all instances
+	L.SetField(rf, "resumeAnimation", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+
+		updateSpriteAnimations(spriteName, func(animState *animation.AnimationState) {
+			animation.ResumeAnimation(animState)
+		})
+
+		return 0
+	}))
+
+	// rf.stopAnimation(spriteName) -> stops animation for all instances
+	L.SetField(rf, "stopAnimation", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+
+		updateSpriteAnimations(spriteName, func(animState *animation.AnimationState) {
+			animation.StopAnimation(animState)
+		})
+
+		return 0
+	}))
+
+	// rf.setAnimationSpeed(spriteName, speed) -> sets speed multiplier for all instances
+	L.SetField(rf, "setAnimationSpeed", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+		speed := L.CheckNumber(2)
+
+		updateSpriteAnimations(spriteName, func(animState *animation.AnimationState) {
+			animation.SetAnimationSpeed(animState, float64(speed))
+		})
+
+		return 0
+	}))
+
+	// rf.setAnimationFrame(spriteName, frameIndex) -> sets frame index for all instances
+	L.SetField(rf, "setAnimationFrame", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+		frameIndex := L.CheckInt(2)
+
+		updateSpriteAnimations(spriteName, func(animState *animation.AnimationState) {
+			if err := animation.SetAnimationFrame(animState, frameIndex); err != nil {
+				// Log error but don't fail - individual instances might fail
+				if devModePtr != nil {
+					devModePtr.AddDebugLog(fmt.Sprintf("Failed to set frame %d on sprite '%s': %v", frameIndex, spriteName, err))
+				}
+			}
+		})
+
+		return 0
+	}))
+
+	// rf.getAnimationFrame(spriteName) -> returns current frame index (from first available instance)
+	L.SetField(rf, "getAnimationFrame", L.NewFunction(func(L *lua.LState) int {
+		spriteName := L.CheckString(1)
+
+		// Check direct animation state first
+		if animState, exists := animationStates[spriteName]; exists {
+			frame := animation.GetAnimationFrame(animState)
+			L.Push(lua.LNumber(frame))
+			return 1
+		}
+
+		// Check pool instances
+		var foundFrame int = -1
+		poolManager.ForEachActiveInstance(spriteName, func(instance *spritepool.SpriteInstance) {
+			if instance.AnimationState != nil && foundFrame == -1 {
+				foundFrame = animation.GetAnimationFrame(instance.AnimationState)
+			}
+		})
+		if foundFrame != -1 {
+			L.Push(lua.LNumber(foundFrame))
+			return 1
+		}
+
+		// No active animation
+		L.Push(lua.LNumber(-1))
 		return 1
 	}))
 

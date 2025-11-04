@@ -34,6 +34,12 @@ mkdir -p "${BIN_DIR}"
 echo -e "${YELLOW}Cleaning bin directory...${NC}"
 rm -f "${BIN_DIR}"/*
 
+# Clean screenshot files
+echo -e "${YELLOW}Cleaning screenshot files...${NC}"
+find . -name "screenshot-*.png" -type f -delete 2>/dev/null || true
+find . -name "screenshot-*.jpg" -type f -delete 2>/dev/null || true
+find . -name "screenshot-*.jpeg" -type f -delete 2>/dev/null || true
+
 # Build flags
 LDFLAGS="-s -w"
 PKG="./cmd/retroforge"

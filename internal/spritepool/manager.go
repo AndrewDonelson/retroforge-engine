@@ -152,3 +152,23 @@ func (pm *PoolManager) Clear() {
 	defer pm.mu.Unlock()
 	pm.pools = make(map[string]*Pool)
 }
+
+// ForEachActiveInstance calls fn for each active instance of the specified sprite
+func (pm *PoolManager) ForEachActiveInstance(spriteName string, fn func(*SpriteInstance)) {
+	pm.mu.RLock()
+	pool, exists := pm.pools[spriteName]
+	pm.mu.RUnlock()
+	
+	if !exists {
+		return
+	}
+	
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	
+	for instance := range pool.active {
+		if instance.IsActive {
+			fn(instance)
+		}
+	}
+}

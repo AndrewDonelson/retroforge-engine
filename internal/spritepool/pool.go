@@ -5,19 +5,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AndrewDonelson/retroforge-engine/internal/animation"
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
 )
 
 // SpriteInstance represents a runtime instance of a sprite
 type SpriteInstance struct {
-	Name       string                 // Sprite name
-	X          float64                // X position
-	Y          float64                // Y position
-	Age        time.Duration          // Age since spawn (for lifetime management)
-	IsActive   bool                   // Whether this instance is currently active
-	IsPooled   bool                   // Whether this instance came from a pool
-	Data       cartio.SpriteData      // Reference to sprite data
-	CustomData map[string]interface{} // Custom data storage for Lua
+	Name           string                 // Sprite name
+	X              float64                // X position
+	Y              float64                // Y position
+	Age            time.Duration          // Age since spawn (for lifetime management)
+	IsActive       bool                   // Whether this instance is currently active
+	IsPooled       bool                   // Whether this instance came from a pool
+	Data           cartio.SpriteData      // Reference to sprite data
+	CustomData     map[string]interface{} // Custom data storage for Lua
+	AnimationState *animation.AnimationState // Animation state for this instance
 }
 
 // Pool manages a collection of sprite instances for reuse
@@ -43,14 +45,15 @@ func NewPool(spriteName string, spriteData cartio.SpriteData, initialSize int, m
 	// Pre-allocate initial instances
 	for i := 0; i < initialSize; i++ {
 		instance := &SpriteInstance{
-			Name:       spriteName,
-			X:          0,
-			Y:          0,
-			Age:        0,
-			IsActive:   false,
-			IsPooled:   true,
-			Data:       spriteData,
-			CustomData: make(map[string]interface{}),
+			Name:           spriteName,
+			X:              0,
+			Y:              0,
+			Age:            0,
+			IsActive:       false,
+			IsPooled:       true,
+			Data:           spriteData,
+			CustomData:     make(map[string]interface{}),
+			AnimationState: animation.NewAnimationState(spriteName),
 		}
 		pool.available = append(pool.available, instance)
 	}
@@ -84,32 +87,34 @@ func (p *Pool) Acquire() (*SpriteInstance, error) {
 	if activeCount >= p.maxSize {
 		// Pool exhausted - create overflow instance (non-pooled)
 		return &SpriteInstance{
-			Name:       p.spriteName,
-			X:          0,
-			Y:          0,
-			Age:        0,
-			IsActive:   true,
-			IsPooled:   false, // Overflow instance is not pooled
-			Data:       p.spriteData,
-			CustomData: make(map[string]interface{}),
+			Name:           p.spriteName,
+			X:              0,
+			Y:              0,
+			Age:            0,
+			IsActive:       true,
+			IsPooled:       false, // Overflow instance is not pooled
+			Data:           p.spriteData,
+			CustomData:     make(map[string]interface{}),
+			AnimationState: animation.NewAnimationState(p.spriteName),
 		}, fmt.Errorf("pool exhausted for %s, creating overflow instance", p.spriteName)
 	}
 
 	// Grow pool dynamically
 	growthSize := p.calculateGrowthSize(activeCount)
-	for i := 0; i < growthSize; i++ {
-		instance := &SpriteInstance{
-			Name:       p.spriteName,
-			X:          0,
-			Y:          0,
-			Age:        0,
-			IsActive:   false,
-			IsPooled:   true,
-			Data:       p.spriteData,
-			CustomData: make(map[string]interface{}),
+		for i := 0; i < growthSize; i++ {
+			instance := &SpriteInstance{
+				Name:           p.spriteName,
+				X:              0,
+				Y:              0,
+				Age:            0,
+				IsActive:       false,
+				IsPooled:       true,
+				Data:           p.spriteData,
+				CustomData:     make(map[string]interface{}),
+				AnimationState: animation.NewAnimationState(p.spriteName),
+			}
+			p.available = append(p.available, instance)
 		}
-		p.available = append(p.available, instance)
-	}
 
 	// Get the first newly created instance
 	instance := p.available[len(p.available)-1]
@@ -140,6 +145,10 @@ func (p *Pool) Release(instance *SpriteInstance) error {
 	for k := range instance.CustomData {
 		delete(instance.CustomData, k)
 	}
+	// Reset animation state
+	if instance.AnimationState != nil {
+		instance.AnimationState.Reset()
+	}
 
 	// Remove from active and add to available
 	delete(p.active, instance)
@@ -147,22 +156,30 @@ func (p *Pool) Release(instance *SpriteInstance) error {
 	return nil
 }
 
-// Update updates all active instances and handles lifetime expiration
+// Update updates all active instances and handles lifetime expiration and animations
 func (p *Pool) Update(deltaTime time.Duration) []*SpriteInstance {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
 	expired := make([]*SpriteInstance, 0)
+	deltaTimeMs := int64(deltaTime / time.Millisecond)
 
-	// If sprite has lifetime, check for expiration
-	if p.spriteData.Lifetime > 0 {
-		lifetime := time.Duration(p.spriteData.Lifetime) * time.Millisecond
-		for instance := range p.active {
-			if instance.IsActive {
+	// Update all active instances
+	for instance := range p.active {
+		if instance.IsActive {
+			// Update lifetime
+			if p.spriteData.Lifetime > 0 {
+				lifetime := time.Duration(p.spriteData.Lifetime) * time.Millisecond
 				instance.Age += deltaTime
 				if instance.Age >= lifetime {
 					expired = append(expired, instance)
+					continue
 				}
+			}
+
+			// Update animation state if sprite supports animations
+			if instance.AnimationState != nil && p.spriteData.Type == cartio.SpriteTypeAnimation {
+				animation.UpdateAnimationState(instance.AnimationState, &p.spriteData, deltaTimeMs)
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 package luabind
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
@@ -328,8 +329,33 @@ func TestSpriteErrors(t *testing.T) {
 
 	Register(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), spritesMap, nil, nil)
 
-	// Test invalid dimensions
-	err := L.DoString(`rf.newSprite("test", -1, 10)`)
+	// Test invalid dimensions - too small (< 2x2)
+	err := L.DoString(`rf.newSprite("test", 1, 10)`)
+	if err == nil {
+		t.Error("should error on width < 2")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 10, 1)`)
+	if err == nil {
+		t.Error("should error on height < 2")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 1, 1)`)
+	if err == nil {
+		t.Error("should error on 1x1 sprite")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 0, 10)`)
+	if err == nil {
+		t.Error("should error on width = 0")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 10, 0)`)
+	if err == nil {
+		t.Error("should error on height = 0")
+	}
+
+	err = L.DoString(`rf.newSprite("test", -1, 10)`)
 	if err == nil {
 		t.Error("should error on negative width")
 	}
@@ -339,14 +365,174 @@ func TestSpriteErrors(t *testing.T) {
 		t.Error("should error on negative height")
 	}
 
-	err = L.DoString(`rf.newSprite("test", 300, 10)`)
+	// Test gameplay sprite too large (> 32x32)
+	err = L.DoString(`rf.newSprite("test", 33, 32, false)`)
 	if err == nil {
-		t.Error("should error on width > 256")
+		t.Error("should error on gameplay sprite width > 32")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 32, 33, false)`)
+	if err == nil {
+		t.Error("should error on gameplay sprite height > 32")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 33, 33, false)`)
+	if err == nil {
+		t.Error("should error on gameplay sprite 33x33")
+	}
+
+	// Test UI sprite too large (> 256)
+	err = L.DoString(`rf.newSprite("test", 257, 256, true)`)
+	if err == nil {
+		t.Error("should error on UI sprite width > 256")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 256, 257, true)`)
+	if err == nil {
+		t.Error("should error on UI sprite height > 256")
+	}
+
+	// Test UI sprite odd dimensions (not divisible by 2)
+	err = L.DoString(`rf.newSprite("test", 3, 4, true)`)
+	if err == nil {
+		t.Error("should error on UI sprite with odd width")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 4, 3, true)`)
+	if err == nil {
+		t.Error("should error on UI sprite with odd height")
+	}
+
+	err = L.DoString(`rf.newSprite("test", 3, 3, true)`)
+	if err == nil {
+		t.Error("should error on UI sprite with odd dimensions")
 	}
 
 	// Test sprite not found
 	err = L.DoString(`rf.sprite_pset("nonexistent", 0, 0, 1)`)
 	if err == nil {
 		t.Error("should error on nonexistent sprite")
+	}
+}
+
+func TestSpriteSizeValidation(t *testing.T) {
+	L := lua.NewState()
+	defer L.Close()
+
+	r := rendersoft.New(480, 270)
+	colorByIndex := func(i int) (rgba [4]uint8) { return [4]uint8{255, 255, 255, 255} }
+	setPalette := func(name string) {}
+	spritesMap := make(cartio.SpriteMap)
+
+	Register(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), spritesMap, nil, nil)
+
+	// Test valid gameplay sprites (2x2 to 32x32)
+	testCases := []struct {
+		name     string
+		width    int
+		height   int
+		isUI     bool
+		shouldErr bool
+	}{
+		{"gameplay_2x2", 2, 2, false, false},
+		{"gameplay_8x8", 8, 8, false, false},
+		{"gameplay_16x16", 16, 16, false, false},
+		{"gameplay_32x32", 32, 32, false, false},
+		{"gameplay_3x5", 3, 5, false, false}, // Any size 2-32
+		{"gameplay_7x11", 7, 11, false, false},
+		{"gameplay_15x23", 15, 23, false, false},
+		{"gameplay_31x2", 31, 2, false, false},
+		{"gameplay_2x31", 2, 31, false, false},
+		{"ui_2x2", 2, 2, true, false},
+		{"ui_4x4", 4, 4, true, false},
+		{"ui_8x8", 8, 8, true, false},
+		{"ui_16x16", 16, 16, true, false},
+		{"ui_32x32", 32, 32, true, false},
+		{"ui_64x64", 64, 64, true, false},
+		{"ui_128x128", 128, 128, true, false},
+		{"ui_256x256", 256, 256, true, false},
+		{"ui_2x256", 2, 256, true, false},
+		{"ui_256x2", 256, 2, true, false},
+		{"ui_4x128", 4, 128, true, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			spritesMap := make(cartio.SpriteMap)
+			Register(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), spritesMap, nil, nil)
+			
+			var luaCode string
+			if tc.isUI {
+				luaCode = fmt.Sprintf(`rf.newSprite("%s", %d, %d, true)`, tc.name, tc.width, tc.height)
+			} else {
+				luaCode = fmt.Sprintf(`rf.newSprite("%s", %d, %d, false)`, tc.name, tc.width, tc.height)
+			}
+			
+			err := L.DoString(luaCode)
+			if tc.shouldErr {
+				if err == nil {
+					t.Errorf("expected error for %s (%dx%d, isUI=%v)", tc.name, tc.width, tc.height, tc.isUI)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error for %s (%dx%d, isUI=%v): %v", tc.name, tc.width, tc.height, tc.isUI, err)
+				}
+				// Verify sprite was created
+				if _, ok := spritesMap[tc.name]; !ok {
+					t.Errorf("sprite %s should exist in map", tc.name)
+				}
+			}
+		})
+	}
+}
+
+func TestSpriteIsUI(t *testing.T) {
+	L := lua.NewState()
+	defer L.Close()
+
+	r := rendersoft.New(480, 270)
+	colorByIndex := func(i int) (rgba [4]uint8) { return [4]uint8{255, 255, 255, 255} }
+	setPalette := func(name string) {}
+	spritesMap := make(cartio.SpriteMap)
+
+	Register(L, r, colorByIndex, setPalette, make(cartio.SFXMap), make(cartio.MusicMap), spritesMap, nil, nil)
+
+	// Test default isUI=true
+	err := L.DoString(`rf.newSprite("ui_default", 16, 16)`)
+	if err != nil {
+		t.Fatalf("Lua error: %v", err)
+	}
+	sprite, ok := spritesMap["ui_default"]
+	if !ok {
+		t.Fatal("sprite should exist")
+	}
+	if !sprite.IsUI {
+		t.Error("default isUI should be true")
+	}
+
+	// Test explicit isUI=true
+	err = L.DoString(`rf.newSprite("ui_explicit", 16, 16, true)`)
+	if err != nil {
+		t.Fatalf("Lua error: %v", err)
+	}
+	sprite, ok = spritesMap["ui_explicit"]
+	if !ok {
+		t.Fatal("sprite should exist")
+	}
+	if !sprite.IsUI {
+		t.Error("explicit isUI=true should be true")
+	}
+
+	// Test explicit isUI=false
+	err = L.DoString(`rf.newSprite("gameplay", 16, 16, false)`)
+	if err != nil {
+		t.Fatalf("Lua error: %v", err)
+	}
+	sprite, ok = spritesMap["gameplay"]
+	if !ok {
+		t.Fatal("sprite should exist")
+	}
+	if sprite.IsUI {
+		t.Error("explicit isUI=false should be false")
 	}
 }

@@ -48,6 +48,10 @@ func Set(i int, down bool) {
 		if down && !cur[i] {
 			justPressed[i] = true
 		}
+		// Clear justPressed when button is released (prevents stale flags)
+		if !down {
+			justPressed[i] = false
+		}
 		cur[i] = down 
 	} 
 }

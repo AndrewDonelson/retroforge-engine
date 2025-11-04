@@ -108,6 +108,7 @@ func LoadRPI(data []byte) (*SpriteData, error) {
 		Width:        width,
 		Height:       height,
 		Pixels:       pixels,
+		Type:         SpriteTypeStatic, // RPI files are always static
 		UseCollision: false,
 		IsUI:         true, // Screens/backgrounds are typically UI
 		Lifetime:     0,

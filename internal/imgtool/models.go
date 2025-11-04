@@ -49,9 +49,11 @@ func (p *Palette) Validate() error {
 
 // Validate validates the sprite structure
 func (s *Sprite) Validate() error {
-	if s.Width <= 0 || s.Height <= 0 {
-		return ErrInvalidDimensions
+	// Validate size using new rules (minimum 2x2, gameplay vs UI restrictions)
+	if err := s.ValidateSize(); err != nil {
+		return err
 	}
+	
 	if len(s.Pixels) != s.Height {
 		return ErrInvalidPixelData
 	}
@@ -63,6 +65,30 @@ func (s *Sprite) Validate() error {
 			if idx < -1 || idx > 49 {
 				return fmt.Errorf("invalid palette index at [%d][%d]: %d", i, j, idx)
 			}
+		}
+	}
+	return nil
+}
+
+// ValidateSize validates sprite dimensions based on new size rules
+func (s *Sprite) ValidateSize() error {
+	// Minimum size: 2x2
+	if s.Width < 2 || s.Height < 2 {
+		return fmt.Errorf("sprite dimensions must be at least 2x2, got %dx%d", s.Width, s.Height)
+	}
+
+	if s.IsUI {
+		// UI sprites: 2-256, both dimensions divisible by 2
+		if s.Width > 256 || s.Height > 256 {
+			return fmt.Errorf("UI sprite dimensions cannot exceed 256, got %dx%d", s.Width, s.Height)
+		}
+		if s.Width%2 != 0 || s.Height%2 != 0 {
+			return fmt.Errorf("UI sprite dimensions must be divisible by 2, got %dx%d", s.Width, s.Height)
+		}
+	} else {
+		// Gameplay sprites: 2-32
+		if s.Width > 32 || s.Height > 32 {
+			return fmt.Errorf("gameplay sprite dimensions cannot exceed 32x32, got %dx%d", s.Width, s.Height)
 		}
 	}
 	return nil

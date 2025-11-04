@@ -28,8 +28,16 @@ echo -e "${BLUE}RetroForge Production Release${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
-# Step 1: Build all platforms
-echo -e "${YELLOW}Step 1: Building all platforms...${NC}"
+# Step 1: Clean screenshot files
+echo -e "${YELLOW}Step 1: Cleaning screenshot files...${NC}"
+find . -name "screenshot-*.png" -type f -delete 2>/dev/null || true
+find . -name "screenshot-*.jpg" -type f -delete 2>/dev/null || true
+find . -name "screenshot-*.jpeg" -type f -delete 2>/dev/null || true
+echo -e "${GREEN}✓ Screenshots cleaned${NC}"
+echo ""
+
+# Step 2: Build all platforms
+echo -e "${YELLOW}Step 2: Building all platforms...${NC}"
 ./build-production.sh "$VERSION_TYPE"
 
 if [ $? -ne 0 ]; then
@@ -45,8 +53,8 @@ echo ""
 echo -e "${GREEN}✓ Build completed successfully${NC}"
 echo ""
 
-# Step 2: Update webapp WASM files
-echo -e "${YELLOW}Step 2: Updating webapp WASM files...${NC}"
+# Step 3: Update webapp WASM files
+echo -e "${YELLOW}Step 3: Updating webapp WASM files...${NC}"
 
 WEBAPP_DIR="../retroforge-webapp"
 WASM_FILE=$(ls bin/retroforge-*.wasm | head -n1)

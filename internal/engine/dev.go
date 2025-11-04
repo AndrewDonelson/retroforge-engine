@@ -262,7 +262,25 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 	spritesPath := filepath.Join(cartPath, "assets", "sprites.json")
 	e.spritesMap = make(cartio.SpriteMap)
 	if b, err := os.ReadFile(spritesPath); err == nil {
-		json.Unmarshal(b, &e.spritesMap)
+		if err := json.Unmarshal(b, &e.spritesMap); err == nil {
+			// Validate and normalize all loaded sprites
+			for spriteName, sprite := range e.spritesMap {
+				// Normalize sprite data (set defaults, trim whitespace, etc.)
+				cartio.NormalizeSpriteData(&sprite)
+				
+				// Validate complete sprite structure
+				if err := cartio.ValidateSpriteData(&sprite, spriteName); err != nil {
+					if e.devMode != nil {
+						e.devMode.AddDebugLog(fmt.Sprintf("Sprite '%s' validation error: %v", spriteName, err))
+					}
+					// Remove invalid sprite from map
+					delete(e.spritesMap, spriteName)
+				} else {
+					// Update map with normalized sprite
+					e.spritesMap[spriteName] = sprite
+				}
+			}
+		}
 	}
 	
 	// Load .rpi files (Raw Palette Indexed images)
@@ -278,7 +296,17 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 				rpiPath := filepath.Join(assetsPathForRPI, name)
 				if data, err := os.ReadFile(rpiPath); err == nil {
 					if rpiSprite, err := cartio.LoadRPI(data); err == nil {
-						e.spritesMap[spriteName] = *rpiSprite
+						// Normalize RPI sprite (ensure type is set)
+						cartio.NormalizeSpriteData(rpiSprite)
+						
+						// Validate RPI sprite
+						if err := cartio.ValidateSpriteData(rpiSprite, spriteName); err == nil {
+							e.spritesMap[spriteName] = *rpiSprite
+						} else {
+							if e.devMode != nil {
+								e.devMode.AddDebugLog(fmt.Sprintf("RPI sprite '%s' validation error: %v", spriteName, err))
+							}
+						}
 					}
 				}
 			}
@@ -420,7 +448,25 @@ func (e *Engine) ReloadCart() error {
 	spritesPath := filepath.Join(cartPath, "assets", "sprites.json")
 	e.spritesMap = make(cartio.SpriteMap)
 	if b, err := os.ReadFile(spritesPath); err == nil {
-		json.Unmarshal(b, &e.spritesMap)
+		if err := json.Unmarshal(b, &e.spritesMap); err == nil {
+			// Validate and normalize all loaded sprites
+			for spriteName, sprite := range e.spritesMap {
+				// Normalize sprite data (set defaults, trim whitespace, etc.)
+				cartio.NormalizeSpriteData(&sprite)
+				
+				// Validate complete sprite structure
+				if err := cartio.ValidateSpriteData(&sprite, spriteName); err != nil {
+					if e.devMode != nil {
+						e.devMode.AddDebugLog(fmt.Sprintf("Sprite '%s' validation error: %v", spriteName, err))
+					}
+					// Remove invalid sprite from map
+					delete(e.spritesMap, spriteName)
+				} else {
+					// Update map with normalized sprite
+					e.spritesMap[spriteName] = sprite
+				}
+			}
+		}
 	}
 	
 	// Load .rpi files (Raw Palette Indexed images) - also on reload
@@ -436,7 +482,17 @@ func (e *Engine) ReloadCart() error {
 				rpiPath := filepath.Join(assetsPathForRPI, name)
 				if data, err := os.ReadFile(rpiPath); err == nil {
 					if rpiSprite, err := cartio.LoadRPI(data); err == nil {
-						e.spritesMap[spriteName] = *rpiSprite
+						// Normalize RPI sprite (ensure type is set)
+						cartio.NormalizeSpriteData(rpiSprite)
+						
+						// Validate RPI sprite
+						if err := cartio.ValidateSpriteData(rpiSprite, spriteName); err == nil {
+							e.spritesMap[spriteName] = *rpiSprite
+						} else {
+							if e.devMode != nil {
+								e.devMode.AddDebugLog(fmt.Sprintf("RPI sprite '%s' validation error: %v", spriteName, err))
+							}
+						}
 					}
 				}
 			}
