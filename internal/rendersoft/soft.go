@@ -8,23 +8,38 @@ import (
 
 type Soft struct {
 	w, h                       int
-	pix                        []uint8 // RGBA
+	backPix                    []uint8 // RGBA - back buffer (for drawing)
+	frontPix                   []uint8 // RGBA - front buffer (for reading)
 	clipX, clipY, clipW, clipH int     // Clipping rectangle (0,0,0,0 = disabled)
 	cameraX, cameraY           int     // Camera offset
 }
 
-func New(w, h int) *Soft { return &Soft{w: w, h: h, pix: make([]uint8, w*h*4)} }
+func New(w, h int) *Soft {
+	size := w * h * 4
+	return &Soft{
+		w:       w,
+		h:       h,
+		backPix: make([]uint8, size),
+		frontPix: make([]uint8, size),
+	}
+}
 
 func (s *Soft) Width() int      { return s.w }
 func (s *Soft) Height() int     { return s.h }
-func (s *Soft) Pixels() []uint8 { return s.pix }
+func (s *Soft) Pixels() []uint8 { return s.frontPix } // Return front buffer (completed frame)
+
+// SwapBuffers swaps the back and front buffers. Call this after drawing is complete.
+func (s *Soft) SwapBuffers() {
+	s.backPix, s.frontPix = s.frontPix, s.backPix
+}
 
 func (s *Soft) Clear(c color.RGBA) {
-	for i := 0; i < len(s.pix); i += 4 {
-		s.pix[i+0] = c.R
-		s.pix[i+1] = c.G
-		s.pix[i+2] = c.B
-		s.pix[i+3] = 0xFF
+	// Clear back buffer (drawing buffer)
+	for i := 0; i < len(s.backPix); i += 4 {
+		s.backPix[i+0] = c.R
+		s.backPix[i+1] = c.G
+		s.backPix[i+2] = c.B
+		s.backPix[i+3] = 0xFF
 	}
 }
 
@@ -43,10 +58,10 @@ func (s *Soft) set(x, y int, c color.RGBA) {
 	}
 
 	idx := (y*s.w + x) * 4
-	s.pix[idx+0] = c.R
-	s.pix[idx+1] = c.G
-	s.pix[idx+2] = c.B
-	s.pix[idx+3] = 0xFF
+	s.backPix[idx+0] = c.R
+	s.backPix[idx+1] = c.G
+	s.backPix[idx+2] = c.B
+	s.backPix[idx+3] = 0xFF
 }
 
 func (s *Soft) PSet(x, y int, c color.RGBA) {
@@ -60,12 +75,13 @@ func (s *Soft) PGet(x, y int) color.RGBA {
 	if x < 0 || y < 0 || x >= s.w || y >= s.h {
 		return color.RGBA{0, 0, 0, 0} // Return transparent for out of bounds
 	}
+	// Read from back buffer (current drawing buffer)
 	idx := (y*s.w + x) * 4
 	return color.RGBA{
-		R: s.pix[idx+0],
-		G: s.pix[idx+1],
-		B: s.pix[idx+2],
-		A: s.pix[idx+3],
+		R: s.backPix[idx+0],
+		G: s.backPix[idx+1],
+		B: s.backPix[idx+2],
+		A: s.backPix[idx+3],
 	}
 }
 

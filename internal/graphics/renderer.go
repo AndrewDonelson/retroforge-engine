@@ -33,4 +33,6 @@ type Renderer interface {
 	GetClip() (x, y, w, h int) // Get current clip rectangle
 	SetCamera(x, y int)        // Set camera offset
 	GetCamera() (x, y int)     // Get camera offset
+	// SwapBuffers swaps front and back buffers for double buffering (call after drawing is complete)
+	SwapBuffers()
 }

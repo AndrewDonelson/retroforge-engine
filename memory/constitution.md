@@ -68,6 +68,52 @@ RetroForge Engine provides a modern, cross-platform runtime for creating retro-s
 - **Backward compatibility** for stable APIs
 - **Progressive enhancement** for new features
 
+### State Machine System
+- **All example carts MUST use module-based state system** (`rf.import()`)
+- **State modules require these functions:**
+  - `_INIT()` - Called once when state is first created
+  - `_UPDATE(dt)` - Called every frame (dt is delta time in seconds)
+  - `_DRAW()` - Called every frame
+  - `_HANDLE_INPUT()` - Called every frame (before update)
+  - `_DONE()` - Called once when state is destroyed
+- **Optional functions:**
+  - `_ENTER()` - Called every time state becomes active
+  - `_EXIT()` - Called every time state becomes inactive
+- **State file naming:** `play_state.lua` → state name is `"play"`
+- **Engine startup flow (AUTOMATIC, handled by engine):**
+  1. **First state:** Engine splash screen (2 seconds or any input to skip)
+  2. **Second state:** After engine splash:
+     - If `splash_state.lua` exists → transition to `"splash"` state
+     - Else → transition to `initialState` (defaults to `"menu"`)
+  3. **NO manual state transitions needed** - engine handles everything
+- **IMPORTANT:** 
+  - If you only have one state, name it `menu_state.lua` so it registers as `"menu"` and matches the engine's default
+  - Import states directly in `main.lua` (not in `_INIT()` function)
+  - Engine automatically transitions after splash - do NOT call `game.changeState()` manually at startup
+- **Button API:** `rf.btn(index)` and `rf.btnp(index)` use **numeric indices 0-10**, NOT string names
+  - Button indices: 0=SELECT, 1=START, 2=UP, 3=DOWN, 4=LEFT, 5=RIGHT, 6=A, 7=B, 8=X, 9=Y, 10=TURBO
+- **Movement/continuous actions** go in `_UPDATE(dt)` using `dt` parameter
+- **Button presses** (`rf.btnp()`) go in `_HANDLE_INPUT()`
+- **Button holds** (`rf.btn()`) can go in either `_HANDLE_INPUT()` or `_UPDATE(dt)`
+- **Example structure:**
+  ```lua
+  -- main.lua
+  local play_state = rf.import("play_state.lua")
+  
+  -- play_state.lua
+  function _INIT() end
+  function _ENTER() end
+  function _HANDLE_INPUT()
+    if rf.btnp("a") then -- Instant actions
+  end
+  function _UPDATE(dt)
+    if rf.btn("up") then -- Continuous actions using dt
+  end
+  function _DRAW() end
+  function _EXIT() end
+  function _DONE() end
+  ```
+
 ---
 
 ## 🚀 Development Philosophy

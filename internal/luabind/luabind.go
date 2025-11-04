@@ -909,6 +909,11 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 					}
 					animationStates[name] = animState
 				}
+				// Update animation state with delta time (fallback - proper update should happen in engine loop)
+				// This ensures frames advance even if engine loop doesn't update
+				if animState.Playing && !animState.Paused {
+					animation.UpdateAnimationState(animState, &sprite, 16) // ~60fps = ~16ms per frame
+				}
 				// Get current frame from animation state
 				currentFrameName := animation.GetCurrentFrameName(animState)
 				if currentFrameName == "" {

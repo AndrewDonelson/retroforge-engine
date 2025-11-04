@@ -108,12 +108,18 @@ func New(targetFPS int) *Engine {
 				// This matches SDL behavior exactly
 				e.GSM.HandleInput()
 
-					// Update and draw using state machine
-					e.GSM.Update(dtSec)
-					e.GSM.Draw()
-					
-					// Clear stale justPressed flags at end of frame (after HandleInput/Draw)
-					input.ClearStaleJustPressed()
+				// Update and draw using state machine
+				e.GSM.Update(dtSec)
+				e.GSM.Draw()
+				// Swap buffers after drawing is complete (double buffering)
+				if e.Ren != nil {
+					if swapper, ok := e.Ren.(interface{ SwapBuffers() }); ok {
+						swapper.SwapBuffers()
+					}
+				}
+				
+				// Clear stale justPressed flags at end of frame (after HandleInput/Draw)
+				input.ClearStaleJustPressed()
 				} else {
 					// No active state - this game doesn't use state machine (old-style Lua game)
 					// OR the splash was popped intentionally (e.g., game uses direct _UPDATE/_DRAW)
@@ -121,6 +127,12 @@ func New(targetFPS int) *Engine {
 					if e.VM != nil && e.VM.L != nil {
 						_ = e.VM.CallUpdate(dtSec)
 						_ = e.VM.CallDraw()
+						// Swap buffers after drawing is complete (double buffering)
+						if e.Ren != nil {
+							if swapper, ok := e.Ren.(interface{ SwapBuffers() }); ok {
+								swapper.SwapBuffers()
+							}
+						}
 						// Clear stale justPressed flags at end of frame
 						input.ClearStaleJustPressed()
 					}
@@ -130,6 +142,12 @@ func New(targetFPS int) *Engine {
 				if e.VM != nil && e.VM.L != nil {
 					_ = e.VM.CallUpdate(dtSec)
 					_ = e.VM.CallDraw()
+					// Swap buffers after drawing is complete (double buffering)
+					if e.Ren != nil {
+						if swapper, ok := e.Ren.(interface{ SwapBuffers() }); ok {
+							swapper.SwapBuffers()
+						}
+					}
 					// Clear stale justPressed flags at end of frame
 					input.ClearStaleJustPressed()
 				}

@@ -22,6 +22,9 @@ type Game struct {
 	scale            int
 	screenshotPressed bool
 	screenshotMu     sync.Mutex
+	// Reuse Ebiten image to avoid allocations
+	ebitenImg        *ebiten.Image
+	rgbaImg          *image.RGBA
 }
 
 // Update is called every frame (60 FPS)
@@ -84,17 +87,22 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Create RGBA image from pixel buffer (ABGR format from engine)
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	copy(img.Pix, pix)
-
-	// Convert to Ebiten image
-	ebitenImg := ebiten.NewImageFromImage(img)
+	// Reuse Ebiten image and RGBA buffer to avoid allocations
+	if g.ebitenImg == nil || g.ebitenImg.Bounds().Dx() != w || g.ebitenImg.Bounds().Dy() != h {
+		g.ebitenImg = ebiten.NewImage(w, h)
+		g.rgbaImg = image.NewRGBA(image.Rect(0, 0, w, h))
+	}
+	
+	// Copy pixels directly into reused RGBA buffer
+	copy(g.rgbaImg.Pix, pix)
+	
+	// Update Ebiten image texture from RGBA buffer (reuses existing texture, avoids allocation)
+	g.ebitenImg.ReplacePixels(g.rgbaImg.Pix)
 
 	// Draw with scaling
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(float64(g.scale), float64(g.scale))
-	screen.DrawImage(ebitenImg, op)
+	screen.DrawImage(g.ebitenImg, op)
 }
 
 // Layout returns the game's logical screen size
