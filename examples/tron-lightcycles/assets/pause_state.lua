@@ -134,8 +134,10 @@ function _DRAW()
   rf.print_xy(pause_x, 100, "PAUSED", COLOR_WHITE)
   
   -- Draw menu options
-  local c1 = (selected_option == 1) and COLOR_WHITE or COLOR_GRAY
-  local c2 = (selected_option == 2) and COLOR_WHITE or COLOR_GRAY
+  -- Use medium gray (30) for unselected, white for selected
+  local COLOR_MEDIUM_GRAY = 30
+  local c1 = (selected_option == 1) and COLOR_WHITE or COLOR_MEDIUM_GRAY
+  local c2 = (selected_option == 2) and COLOR_WHITE or COLOR_MEDIUM_GRAY
   
   local resume_x = 240 - string.len("Resume")*3
   local quit_x = 240 - string.len("Quit")*3
@@ -147,7 +149,8 @@ function _DRAW()
 end
 
 function _EXIT()
-  -- Pause menu exit (unused)
+  -- Stop all audio when exiting pause state (safety cleanup)
+  rf.sfx("stopall")
 end
 
 function _DONE()

@@ -33,22 +33,22 @@ func (g *Game) Update() error {
 	// Handle keyboard input - map Ebiten keys to 11-button system
 	// Ebiten uses ebiten.IsKeyPressed for continuous key state
 	// SELECT
-	input.Set(input.BtnSELECT, ebiten.IsKeyPressed(ebiten.KeyQ) || ebiten.IsKeyPressed(ebiten.KeyBackspace))
+	input.Set(input.BtnSELECT, ebiten.IsKeyPressed(ebiten.KeyEnter))
 
 	// START
-	input.Set(input.BtnSTART, ebiten.IsKeyPressed(ebiten.KeyEnter) || ebiten.IsKeyPressed(ebiten.KeyEscape))
+	input.Set(input.BtnSTART, ebiten.IsKeyPressed(ebiten.KeySpace))
 
 	// Directions
-	input.Set(input.BtnUP, ebiten.IsKeyPressed(ebiten.KeyArrowUp) || ebiten.IsKeyPressed(ebiten.KeyW))
-	input.Set(input.BtnDOWN, ebiten.IsKeyPressed(ebiten.KeyArrowDown) || ebiten.IsKeyPressed(ebiten.KeyS))
-	input.Set(input.BtnLEFT, ebiten.IsKeyPressed(ebiten.KeyArrowLeft) || ebiten.IsKeyPressed(ebiten.KeyA))
-	input.Set(input.BtnRIGHT, ebiten.IsKeyPressed(ebiten.KeyArrowRight) || ebiten.IsKeyPressed(ebiten.KeyD))
+	input.Set(input.BtnUP, ebiten.IsKeyPressed(ebiten.KeyArrowUp))
+	input.Set(input.BtnDOWN, ebiten.IsKeyPressed(ebiten.KeyArrowDown))
+	input.Set(input.BtnLEFT, ebiten.IsKeyPressed(ebiten.KeyArrowLeft))
+	input.Set(input.BtnRIGHT, ebiten.IsKeyPressed(ebiten.KeyArrowRight))
 
 	// Action buttons
-	input.Set(input.BtnA, ebiten.IsKeyPressed(ebiten.KeyZ) || ebiten.IsKeyPressed(ebiten.KeySpace))
-	input.Set(input.BtnB, ebiten.IsKeyPressed(ebiten.KeyX))
-	input.Set(input.BtnX, ebiten.IsKeyPressed(ebiten.KeyC))
-	input.Set(input.BtnY, ebiten.IsKeyPressed(ebiten.KeyV))
+	input.Set(input.BtnA, ebiten.IsKeyPressed(ebiten.KeyA))
+	input.Set(input.BtnB, ebiten.IsKeyPressed(ebiten.KeyS))
+	input.Set(input.BtnX, ebiten.IsKeyPressed(ebiten.KeyZ))
+	input.Set(input.BtnY, ebiten.IsKeyPressed(ebiten.KeyX))
 
 	// TURBO (modifier)
 	input.Set(input.BtnTURBO, ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight))

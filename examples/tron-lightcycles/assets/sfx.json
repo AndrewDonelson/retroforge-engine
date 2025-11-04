@@ -1,45 +1,16 @@
 {
-  "turn": {
-    "type": "sine",
-    "freq": 440,
-    "duration": 0.08,
-    "gain": 0.3
-  },
-  "move": {
-    "type": "thrust",
-    "freq": 45,
-    "duration": 0.1,
-    "gain": 0.075
-  },
-  "select": {
-    "type": "sine",
-    "freq": 700,
-    "duration": 0.08,
-    "gain": 0.3
-  },
-  "crash": {
-    "type": "noise",
-    "freq": 0,
-    "duration": 0.25,
-    "gain": 0.4
-  },
-  "lost": {
-    "type": "sine",
-    "freq": 200,
-    "duration": 0.5,
-    "gain": 0.35
-  },
-  "won": {
-    "type": "sine",
-    "freq": 880,
-    "duration": 0.15,
-    "gain": 0.3
-  },
-  "boost": {
-    "type": "thrust",
-    "freq": 80,
-    "duration": 0.1,
-    "gain": 0.15
-  }
+  "turn": ["S004D01G2"],
+  "move": ["L045D16G1"],
+  "select": ["S007D01G2"],
+  "crash": ["N000D04G3"],
+  "lost": [
+    "S002D08G3",
+    "S010D04G2",
+    "S008D03G2",
+    "S006D02G2",
+    "S004D01G2",
+    "S002D10G2"
+  ],
+  "won": ["S009D02G2"],
+  "boost": ["L080D16G1"]
 }
-

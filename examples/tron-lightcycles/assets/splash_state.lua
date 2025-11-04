@@ -2,6 +2,7 @@
 
 local splash_time = 0
 local splash_duration = 3.0 -- 3 seconds
+local music_started = false
 
 -- State module functions (required by module system)
 
@@ -11,8 +12,7 @@ end
 
 function _ENTER()
   splash_time = 0
-  -- Start menu music
-  rf.music("menu_music")
+  music_started = false
 end
 
 function _HANDLE_INPUT()
@@ -42,6 +42,7 @@ function _HANDLE_INPUT()
   -- Any button (0-10) skips splash
   -- Button 0: SELECT
   if rf.btnp(0) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -50,6 +51,7 @@ function _HANDLE_INPUT()
   
   -- Button 1: START
   if rf.btnp(1) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -58,6 +60,7 @@ function _HANDLE_INPUT()
   
   -- Button 2: UP
   if rf.btnp(2) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -66,6 +69,7 @@ function _HANDLE_INPUT()
   
   -- Button 3: DOWN
   if rf.btnp(3) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -74,6 +78,7 @@ function _HANDLE_INPUT()
   
   -- Button 4: LEFT
   if rf.btnp(4) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -82,6 +87,7 @@ function _HANDLE_INPUT()
   
   -- Button 5: RIGHT
   if rf.btnp(5) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -90,6 +96,7 @@ function _HANDLE_INPUT()
   
   -- Button 6: A
   if rf.btnp(6) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -98,6 +105,7 @@ function _HANDLE_INPUT()
   
   -- Button 7: B
   if rf.btnp(7) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -106,6 +114,7 @@ function _HANDLE_INPUT()
   
   -- Button 8: X
   if rf.btnp(8) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -114,6 +123,7 @@ function _HANDLE_INPUT()
   
   -- Button 9: Y
   if rf.btnp(9) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -122,6 +132,7 @@ function _HANDLE_INPUT()
   
   -- Button 10: TURBO
   if rf.btnp(10) then
+    rf.sfx("stopall") -- Stop all audio before transition
     if game then
       game.changeState("menu")
     end
@@ -132,8 +143,16 @@ end
 function _UPDATE(dt)
   splash_time = splash_time + dt
   
+  -- Start music on first update (similar to menu state)
+  if not music_started then
+    rf.music("space_odyssey")
+    music_started = true
+  end
+  
   -- Auto-transition after duration
   if splash_time >= splash_duration then
+    -- Stop all audio before transition
+    rf.sfx("stopall")
     -- Transition to menu
     if game then
       game.changeState("menu")

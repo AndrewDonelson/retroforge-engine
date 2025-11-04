@@ -5,6 +5,7 @@ local move_sound_playing = false
 local boost_sound_playing = false
 local boost_amount = 100.0  -- 0-100%
 local is_boosting = false
+local player_move_timer = 0.0  -- Separate timer for player movement when boosting
 
 function _INIT()
   -- Module initialization
@@ -18,6 +19,7 @@ function _ENTER()
   is_boosting = false
   countdown = 3.0
   move_timer = 0.0
+  player_move_timer = 0.0
 end
 
 function _HANDLE_INPUT()
@@ -213,13 +215,41 @@ function _UPDATE(dt)
   end
   
   -- Calculate effective speed (boost increases by 50%)
+  -- Note: speed is in moves per second, so we need to scale the timer update accordingly
   local effective_speed = speed
   if is_boosting then
-    effective_speed = speed * 1.5  -- 50% increase
+    effective_speed = speed * 1.5  -- 50% increase (e.g., 5.0 -> 7.5 moves/sec)
   end
   
-  -- Update move timer (use effective speed)
-  move_timer = move_timer + dt * effective_speed
+  -- Update player move timer separately when boosting (allows player to move faster than enemies)
+  if is_boosting and player and player.alive then
+    player_move_timer = player_move_timer + dt * effective_speed
+    
+    -- Move player more frequently when boosting
+    while player_move_timer >= 1.0 do
+      player_move_timer = player_move_timer - 1.0
+      if not move_cycle(player) then
+        -- Player crashed - stop everything and transition to gameover
+        rf.sfx("move", "off") -- Stop motorcycle sound
+        if boost_sound_playing then
+          rf.sfx("boost", "off")
+        end
+        move_sound_playing = false
+        boost_sound_playing = false
+        rf.sfx("crash")
+        rf.sfx("stopall") -- Stop all sounds before transition
+        best_level = math.max(best_level, level)
+        rf.music("taps") -- Play taps for loss
+        -- Change state immediately - this will exit play state and enter gameover
+        game.changeState("gameover")
+        return -- Exit update early since we're changing states
+      end
+    end
+  end
+  
+  -- Update shared move timer (for normal movement and enemy movement)
+  -- When boosting, player moves separately, so this only affects enemies
+  move_timer = move_timer + dt * speed
   
   if move_timer >= 1.0 then
     move_timer = move_timer - 1.0
@@ -231,13 +261,18 @@ function _UPDATE(dt)
       end
     end
     
-    -- Move player
-    if player and player.alive then
+    -- Move player (only if not boosting - when boosting, player moves via player_move_timer)
+    if not is_boosting and player and player.alive then
       if not move_cycle(player) then
         -- Player crashed - stop everything and transition to gameover
         rf.sfx("move", "off") -- Stop motorcycle sound
+        if boost_sound_playing then
+          rf.sfx("boost", "off")
+        end
         move_sound_playing = false
+        boost_sound_playing = false
         rf.sfx("crash")
+        rf.sfx("stopall") -- Stop all sounds before transition
         best_level = math.max(best_level, level)
         rf.music("taps") -- Play taps for loss
         -- Change state immediately - this will exit play state and enter gameover

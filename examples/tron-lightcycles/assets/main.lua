@@ -465,11 +465,14 @@ end
 
 -- Draw HUD (shared function)
 function draw_hud()
-  -- Score and level at top left
+  -- Score at top left
   local score_text = "SCORE: " .. tostring(score)
-  local level_text = "LEVEL: " .. tostring(level)
   rf.print_xy(2, 2, score_text, COLOR_WHITE)
-  rf.print_xy(2, 10, level_text, COLOR_WHITE)
+  
+  -- Level at top right
+  local level_text = "LEVEL: " .. tostring(level)
+  local level_x = 480 - string.len(level_text) * 6 - 2  -- 6 pixels per character, 2 pixel margin
+  rf.print_xy(level_x, 2, level_text, COLOR_WHITE)
 end
 
 -- (Drawing functions are now in state modules)

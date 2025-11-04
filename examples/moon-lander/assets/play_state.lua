@@ -16,17 +16,66 @@ function _ENTER()
 end
 
 function _HANDLE_INPUT()
-  -- Handle pause (ESC/button 3/Down) - push pause state overlay
-  if rf.btnp(3) then
-    rf.sfx("move")
+  -- ============================================================================
+  -- STANDARD INPUT HANDLER TEMPLATE
+  -- ============================================================================
+  -- Universal 11-Button Input System
+  -- Lua receives ONLY button indices (0-10), not keys.
+  -- Key mapping happens at engine level:
+  --   - WASM: Controller sends button indices directly
+  --   - Desktop: Engine maps keyboard to button indices
+  --
+  -- Button Index Reference:
+  --   0 = SELECT
+  --   1 = START
+  --   2 = UP
+  --   3 = DOWN
+  --   4 = LEFT
+  --   5 = RIGHT
+  --   6 = A
+  --   7 = B
+  --   8 = X
+  --   9 = Y
+  --  10 = TURBO
+  -- ============================================================================
+  
+  -- Button 0: SELECT
+  if rf.btnp(0) then
+    -- SELECT pauses the game
+    rf.sfx("select")
     game.pushState("pause")
     return
   end
   
-  -- Normal game input (when ship alive)
-  if not ship.alive then return end
+  -- Button 1: START
+  -- Not used in play state
   
-  -- Ship controls are handled in _UPDATE
+  -- Button 2: UP
+  -- Thrust control (handled in _UPDATE via rf.btn(2))
+  
+  -- Button 3: DOWN
+  -- Not used in play state
+  
+  -- Button 4: LEFT
+  -- Rotate left (handled in _UPDATE via rf.btn(4))
+  
+  -- Button 5: RIGHT
+  -- Rotate right (handled in _UPDATE via rf.btn(5))
+  
+  -- Button 6: A
+  -- Not used in play state
+  
+  -- Button 7: B
+  -- Not used in play state
+  
+  -- Button 8: X
+  -- Not used in play state
+  
+  -- Button 9: Y
+  -- Not used in play state
+  
+  -- Button 10: TURBO
+  -- Not used in play state
 end
 
 local function normalize_angle()
@@ -75,20 +124,25 @@ function update_crash(dt)
       taps_started = true
     end
     if crash_timer >= taps_total_dur or crash_timer >= 5.0 then
+      rf.sfx("stopall") -- Stop all audio before transition
       game.changeState("menu")
       crash_phase = nil
     end
   else
     if crash_timer >= 5.0 then
+      rf.sfx("stopall") -- Stop all audio before transition
       game.changeState("menu")
     end
   end
 end
 
 function update_play(dt)
-  -- Ship controls
-  if rf.btn(0) then ship.angle = ship.angle + ROT*dt end
-  if rf.btn(1) then ship.angle = ship.angle - ROT*dt end
+  -- Ship controls using Universal 11-button system
+  -- Button 4: LEFT = Rotate left
+  -- Button 5: RIGHT = Rotate right
+  -- Button 2: UP = Thrust
+  if rf.btn(4) then ship.angle = ship.angle + ROT*dt end
+  if rf.btn(5) then ship.angle = ship.angle - ROT*dt end
   normalize_angle()
   
   local thrust = rf.btn(2) and ship.fuel > 0
@@ -232,7 +286,12 @@ function _DRAW()
 end
 
 function _EXIT()
-  -- Cleanup when leaving
+  -- Stop all audio when exiting play state
+  rf.sfx("stopall")
+  if prevThrust then
+    rf.sfx("thrust", "off")
+    prevThrust = false
+  end
 end
 
 function _DONE()

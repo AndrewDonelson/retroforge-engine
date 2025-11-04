@@ -41,7 +41,7 @@ RetroForge Engine is the core runtime engine that powers the RetroForge fantasy 
 │                                                  │
 │  ┌──────────┐  ┌──────────────────────────┐    │
 │  │ Network │  │     Platform Layer        │    │
-│  │ (WebRTC)│  │    (Ebiten/WASM)            │    │
+│  │ (WebRTC)│  │     (Ebiten/WASM)         │    │
 │  └──────────┘  └──────────────────────────┘    │
 └─────────────────────────────────────────────────┘
 ```
@@ -51,8 +51,8 @@ RetroForge Engine is the core runtime engine that powers the RetroForge fantasy 
 ### Prerequisites
 
 - Go 1.23+
-- Pure Go - no CGO or external dependencies required!
-- Cross-compilation works out of the box
+- Pure Go - uses Ebiten for cross-platform graphics (no CGO required!)
+- Cross-compilation works out of the box for all platforms
 
 ### Installation
 
@@ -311,7 +311,7 @@ See [memory/constitution.md](memory/constitution.md) for development principles 
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ---
 

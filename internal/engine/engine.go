@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/AndrewDonelson/retroforge-engine/internal/audio"
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
 	"github.com/AndrewDonelson/retroforge-engine/internal/eventbus"
 	"github.com/AndrewDonelson/retroforge-engine/internal/gamestate"
@@ -248,6 +249,10 @@ func (e *Engine) RunFrames(n int) {
 
 // LoadCartFromReader loads a .rfs from an io.ReaderAt.
 func (e *Engine) LoadCartFromReader(r io.ReaderAt, size int64) error {
+	// Stop all audio from previous cart before loading new one
+	// This prevents music/sounds from previous cart continuing to play
+	audio.StopAll()
+
 	result, err := cartio.Read(r, size)
 	if err != nil {
 		return err
@@ -258,9 +263,17 @@ func (e *Engine) LoadCartFromReader(r io.ReaderAt, size int64) error {
 		e.Pal.Set(result.Manifest.Palette)
 	}
 
-	src, ok := result.Files["assets/"+result.Manifest.Entry]
+	entryPath := "assets/" + result.Manifest.Entry
+	src, ok := result.Files[entryPath]
 	if !ok {
-		return os.ErrNotExist
+		// Provide more helpful error message
+		var availableFiles []string
+		for f := range result.Files {
+			if len(f) > 7 && f[:7] == "assets/" {
+				availableFiles = append(availableFiles, f)
+			}
+		}
+		return fmt.Errorf("entry file not found: %s (manifest entry: %q). Available asset files: %v", entryPath, result.Manifest.Entry, availableFiles)
 	}
 
 	// Store SFX, Music, and Sprites for Lua bindings

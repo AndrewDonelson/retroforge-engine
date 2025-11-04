@@ -5,6 +5,7 @@ type MusicDefinition struct {
 	Tokens []string `json:"tokens"` // Array of note tokens like ["4C1","4E1","R1"]
 	BPM    float64  `json:"bpm"`    // Default BPM (optional, can be overridden)
 	Gain   float64  `json:"gain"`   // Default gain/volume (optional, can be overridden)
+	Loop   bool     `json:"loop"`   // Whether to loop the track (optional)
 }
 
 // MusicMap maps music track names to their definitions

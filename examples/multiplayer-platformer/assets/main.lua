@@ -91,23 +91,94 @@ function _INIT()
 end
 
 function update_menu(dt)
-  if rf.btnp(2) then 
-    menu_selected = math.max(1, menu_selected - 1)
-    rf.sfx("move")
-  end
-  if rf.btnp(3) then 
-    menu_selected = math.min(2, menu_selected + 1)
-    rf.sfx("move")
-  end
-  if rf.btnp(4) or rf.btnp(5) then  -- Z or X
+  -- ============================================================================
+  -- STANDARD INPUT HANDLER TEMPLATE
+  -- ============================================================================
+  -- Universal 11-Button Input System
+  -- Lua receives ONLY button indices (0-10), not keys.
+  -- Key mapping happens at engine level:
+  --   - WASM: Controller sends button indices directly
+  --   - Desktop: Engine maps keyboard to button indices
+  --
+  -- Button Index Reference:
+  --   0 = SELECT
+  --   1 = START
+  --   2 = UP
+  --   3 = DOWN
+  --   4 = LEFT
+  --   5 = RIGHT
+  --   6 = A
+  --   7 = B
+  --   8 = X
+  --   9 = Y
+  --  10 = TURBO
+  -- ============================================================================
+  
+  -- Button 0: SELECT
+  if rf.btnp(0) then
     rf.sfx("select")
     if menu_selected == 1 then
+      rf.sfx("stopall") -- Stop all audio including music
       state = "playing"
       rf.music("bgm")
     else
+      rf.sfx("stopall") -- Stop all audio before exit
       rf.quit()
     end
   end
+  
+  -- Button 1: START
+  if rf.btnp(1) then
+    -- START bypasses menu and goes straight to PLAY
+    rf.sfx("stopall") -- Stop all audio including music
+    state = "playing"
+    rf.music("bgm")
+    return
+  end
+  
+  -- Button 2: UP
+  if rf.btnp(2) then
+    menu_selected = math.max(1, menu_selected - 1)
+    rf.sfx("select")
+  end
+  
+  -- Button 3: DOWN
+  if rf.btnp(3) then
+    menu_selected = math.min(2, menu_selected + 1)
+    rf.sfx("select")
+  end
+  
+  -- Button 4: LEFT
+  -- Not used in menu
+  
+  -- Button 5: RIGHT
+  -- Not used in menu
+  
+  -- Button 6: A
+  if rf.btnp(6) then
+    -- A button also confirms menu selection (same as SELECT)
+    rf.sfx("select")
+    if menu_selected == 1 then
+      rf.sfx("stopall") -- Stop all audio including music
+      state = "playing"
+      rf.music("bgm")
+    else
+      rf.sfx("stopall") -- Stop all audio before exit
+      rf.quit()
+    end
+  end
+  
+  -- Button 7: B
+  -- Not used in menu
+  
+  -- Button 8: X
+  -- Not used in menu
+  
+  -- Button 9: Y
+  -- Not used in menu
+  
+  -- Button 10: TURBO
+  -- Not used in menu
 end
 
 function get_alive_players()
@@ -178,24 +249,24 @@ function update_spectator_mode()
     end
   end
   
-  -- Cycle spectator target: Hold Up (2) + Press X (5) = Tab replacement
-  local tab_pressed = rf.btn(2) and rf.btnp(5)
+  -- Cycle spectator target: Hold UP (2) + Press A (6) = Tab replacement
+  local tab_pressed = rf.btn(2) and rf.btnp(6)
   
   if tab_pressed and not prev_tab_pressed then
     cycle_spectator_target()
-    rf.sfx("move")
+    rf.sfx("select")
   end
   prev_tab_pressed = tab_pressed
   
-  -- EXIT button: Hold Down (3) + Press X (5)
-  if rf.btn(3) and rf.btnp(5) then
+  -- EXIT button: Hold DOWN (3) + Press A (6)
+  if rf.btn(3) and rf.btnp(6) then
     rf.sfx("select")
+    rf.sfx("stopall") -- Stop all audio
     state = "menu"
     game_over = false
     winner = nil
     spectator_target = nil
     prev_tab_pressed = false
-    rf.music("stopall")
     return true
   end
   
@@ -214,15 +285,15 @@ function _UPDATE(dt)
     return  -- Exited to menu
   end
   
-  -- Allow restart when game over (press Z/X)
+  -- Allow restart when game over (press SELECT/A)
   if game_over then
-    if rf.btnp(4) or rf.btnp(5) then
+    if rf.btnp(0) or rf.btnp(6) then
       -- Restart game
+      rf.sfx("stopall") -- Stop all audio
       state = "menu"
       game_over = false
       winner = nil
       spectator_target = nil
-      rf.music("stopall")
     end
     return  -- Stop gameplay when game over
   end
@@ -233,7 +304,7 @@ function _UPDATE(dt)
       winner = id
       game_over = true
       score[id] = score[id] + 100  -- Bonus for winning
-      rf.music("stopall")
+      rf.sfx("stopall") -- Stop all audio
       break
     end
   end
@@ -263,11 +334,11 @@ function update_solo()
   -- If dead, enter spectator mode (though in solo there's no one to spectate)
   if not p.alive then
     -- In solo mode, if dead, can restart
-    if rf.btnp(4) or rf.btnp(5) then
+    if rf.btnp(0) or rf.btnp(6) then
+      rf.sfx("stopall") -- Stop all audio
       state = "menu"
       game_over = false
       winner = nil
-      rf.music("stopall")
     end
     return
   end
@@ -277,10 +348,13 @@ function update_solo()
   local old_vx = p.vx
   local old_y = p.y
   
-  -- Apply inputs
-  if rf.btn(1) then p.vx = 3 end     -- right
-  if rf.btn(0) then p.vx = -3 end    -- left
-  if rf.btn(4) and p.on_ground then  -- jump
+  -- Apply inputs using Universal 11-button system
+  -- Button 5: RIGHT
+  if rf.btn(5) then p.vx = 3 end
+  -- Button 4: LEFT
+  if rf.btn(4) then p.vx = -3 end
+  -- Button 6: A (jump)
+  if rf.btn(6) and p.on_ground then
     p.vy = -5  -- Reduced jump strength by 50% (was -10)
     p.on_ground = false
     rf.sfx("jump")
@@ -326,7 +400,7 @@ function update_solo()
     winner = id
     game_over = true
     score[id] = score[id] + 100
-    rf.music("stopall")
+    rf.sfx("stopall") -- Stop all audio
   end
 end
 
@@ -372,10 +446,13 @@ function update_host()
       local old_vx = p.vx
       local old_y = p.y
       
-      -- Apply inputs (5/sec, but smooth with interpolation)
-      if rf.btn(id, 0) then p.vx = -3 end    -- left
-      if rf.btn(id, 1) then p.vx = 3 end     -- right
-      if rf.btn(id, 4) and p.on_ground then  -- jump
+      -- Apply inputs using Universal 11-button system (5/sec, but smooth with interpolation)
+      -- Button 4: LEFT
+      if rf.btn(id, 4) then p.vx = -3 end
+      -- Button 5: RIGHT
+      if rf.btn(id, 5) then p.vx = 3 end
+      -- Button 6: A (jump)
+      if rf.btn(id, 6) and p.on_ground then
         p.vy = -5  -- Reduced jump strength by 50% (was -10)
         p.on_ground = false
         rf.sfx("jump")  -- Host plays sounds for all players
@@ -439,7 +516,7 @@ function update_host()
         winner = id
         game_over = true
         score[id] = score[id] + 100
-        rf.music("stopall")
+        rf.sfx("stopall") -- Stop all audio
         break
       end
     end
@@ -645,7 +722,7 @@ function _DRAW()
     local exit_h = 12
     
     -- Check if hovering/pressing exit button
-    local exit_active = rf.btn(3) and rf.btnp(5)  -- Down + X pressed
+    local exit_active = rf.btn(3) and rf.btnp(6)  -- Down + A pressed
     
     -- Button background (highlighted if active)
     local bg_color = exit_active and 35 or 37  -- Light blue if active, dark blue otherwise

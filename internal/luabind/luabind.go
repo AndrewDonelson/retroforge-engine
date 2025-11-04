@@ -3,6 +3,7 @@ package luabind
 import (
 	"fmt"
 	"image/color"
+	"strings"
 	"time"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/app"
@@ -564,24 +565,69 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		action := L.OptString(2, "")
 		_ = audio.Init()
 
-		// Check if SFX exists in loaded map
-		if sfx, ok := sfxMap[name]; ok {
-			switch sfx.Type {
-			case "sine":
-				audio.PlaySine(sfx.Freq, sfx.Duration, sfx.Gain)
-			case "noise":
-				audio.PlayNoise(sfx.Duration, sfx.Gain)
-			case "thrust":
-				// Use SFX-specific frequency and gain for thrust sounds
-				// This allows "move" and "boost" to have different sounds
-				if action != "off" {
-					audio.PlayThrust(true, sfx.Freq, sfx.Gain)
-				} else {
-					audio.PlayThrust(false, sfx.Freq, sfx.Gain)
+		// Get tokens for this SFX (handles both new and legacy formats)
+		tokens := cartio.GetSFXTokens(sfxMap, name)
+		if len(tokens) > 0 {
+			// Check if this is a single loop token (L code) - handle immediately
+			if len(tokens) == 1 {
+				token := tokens[0]
+				waveType, freq, _, gain, err := cartio.ParseToken(token)
+				if err == nil && waveType == "thrust" {
+					// Single loop token - handle on/off directly
+					if action != "off" {
+						audio.PlayThrust(true, freq, gain)
+					} else {
+						audio.PlayThrust(false, freq, gain)
+					}
+					return 0
 				}
-			case "stopall":
-				audio.StopAll()
 			}
+
+			// Handle special stopall token
+			if len(tokens) == 1 && tokens[0] == "STOPALL" {
+				audio.StopAll()
+				return 0
+			}
+
+			// Play tokens sequentially (for multi-token sequences)
+			go func() {
+				for _, token := range tokens {
+					// Handle special stopall token
+					if token == "STOPALL" {
+						audio.StopAll()
+						continue
+					}
+
+					waveType, freq, duration, gain, err := cartio.ParseToken(token)
+					if err != nil {
+						continue // Skip invalid tokens
+					}
+
+					switch waveType {
+					case "sine":
+						audio.PlaySine(freq, duration, gain)
+					case "noise":
+						audio.PlayNoise(duration, gain)
+					case "thrust":
+						// For thrust tokens in sequences, still play them but don't wait
+						// (This shouldn't happen in normal sequences, but handle it)
+						if action != "off" {
+							audio.PlayThrust(true, freq, gain)
+						} else {
+							audio.PlayThrust(false, freq, gain)
+						}
+						// For loops, we don't wait - they play until stopped
+						continue
+					case "rest":
+						// Rest: just wait (duration already calculated)
+						time.Sleep(time.Duration(duration * float64(time.Second)))
+						continue
+					}
+
+					// Wait for non-looped sounds to finish
+					time.Sleep(time.Duration(duration * float64(time.Second)))
+				}
+			}()
 			return 0
 		}
 
@@ -648,7 +694,43 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 				if gain == 0 {
 					gain = 0.3 // default
 				}
-				audio.PlayNotes(music.Tokens, bpm, gain)
+				// Play music with loop support
+				loop := music.Loop
+				if loop {
+					// Play in a loop until stopped
+					// StopAll() will set musicStopFlag, which PlayNotes checks internally
+					go func() {
+						for {
+							audio.PlayNotes(music.Tokens, bpm, gain)
+							// Calculate total duration to wait before looping
+							beat := 60.0 / bpm
+							totalBeats := 0.0
+							for _, t := range music.Tokens {
+								s := strings.ToUpper(strings.TrimSpace(t))
+								if s == "" {
+									continue
+								}
+								length := 1
+								if last := s[len(s)-1]; last >= '0' && last <= '9' {
+									length = int(last - '0')
+								}
+								totalBeats += float64(length)
+							}
+							totalDuration := totalBeats * beat
+							// Sleep in chunks to allow responsive stopping
+							chunkDuration := 100 * time.Millisecond
+							elapsed := time.Duration(0)
+							for elapsed < time.Duration(totalDuration*float64(time.Second)) {
+								time.Sleep(chunkDuration)
+								elapsed += chunkDuration
+								// PlayNotes will check musicStopFlag internally and exit early if set
+							}
+						}
+					}()
+				} else {
+					// Play once
+					audio.PlayNotes(music.Tokens, bpm, gain)
+				}
 				return 0
 			}
 		}

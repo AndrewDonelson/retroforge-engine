@@ -73,28 +73,28 @@ func RunWindow(e *engine.Engine, scale int) error {
 				// Map keyboard keys to 11-button system
 				switch ev.Keysym.Sym {
 				// SELECT
-				case sdl.K_q, sdl.K_BACKSPACE:
+				case sdl.K_RETURN:
 					input.Set(input.BtnSELECT, down)
 				// START
-				case sdl.K_RETURN, sdl.K_ESCAPE:
+				case sdl.K_SPACE:
 					input.Set(input.BtnSTART, down)
 				// Directions
-				case sdl.K_UP, sdl.K_w:
+				case sdl.K_UP:
 					input.Set(input.BtnUP, down)
-				case sdl.K_DOWN, sdl.K_s:
+				case sdl.K_DOWN:
 					input.Set(input.BtnDOWN, down)
-				case sdl.K_LEFT, sdl.K_a:
+				case sdl.K_LEFT:
 					input.Set(input.BtnLEFT, down)
-				case sdl.K_RIGHT, sdl.K_d:
+				case sdl.K_RIGHT:
 					input.Set(input.BtnRIGHT, down)
 				// Action buttons
-				case sdl.K_z, sdl.K_SPACE:
+				case sdl.K_a:
 					input.Set(input.BtnA, down)
-				case sdl.K_x:
+				case sdl.K_s:
 					input.Set(input.BtnB, down)
-				case sdl.K_c:
+				case sdl.K_z:
 					input.Set(input.BtnX, down)
-				case sdl.K_v:
+				case sdl.K_x:
 					input.Set(input.BtnY, down)
 				// TURBO (modifier)
 				case sdl.K_LSHIFT, sdl.K_RSHIFT:

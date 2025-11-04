@@ -88,11 +88,19 @@ func StopAll() {
     mu.Lock()
     voices = []*voice{}
     activeThrusts = make(map[string]*voice)
+    musicStopFlag = true // Signal all music goroutines to stop
     mu.Unlock()
     if dev != 0 {
         sdl.ClearQueuedAudio(dev)
     }
     thrustOn = false
+    // Reset flag after a brief moment (allows goroutines to check it)
+    go func() {
+        time.Sleep(100 * time.Millisecond)
+        mu.Lock()
+        musicStopFlag = false
+        mu.Unlock()
+    }()
 }
 
 func mixerLoop() {
@@ -115,7 +123,13 @@ func mixerLoop() {
                     s = math.Sin(2*math.Pi*v.phase) * v.gain
                     v.phase += v.freq * dt
                     if v.phase > 1 { v.phase -= 1 }
+                } else if v.kind == "loop" {
+                    // Loop voices (thrust) - generate continuous sine wave
+                    s = math.Sin(2*math.Pi*v.phase) * v.gain
+                    v.phase += v.freq * dt
+                    if v.phase > 1 { v.phase -= 1 }
                 } else {
+                    // Noise
                     s = (randFloat()*2 - 1) * v.gain
                 }
                 f32[i] += float32(s)
@@ -156,6 +170,7 @@ var noteOffsets = map[string]int{
 
 func noteToFreq(note string, defaultOctave int) (float64, bool) {
     // Formats: "1G#2" (octave-note-len) or "G#2" (note-len) or "R2" (rest)
+    // Note: duration digit is removed before calling this function
     s := strings.ToUpper(strings.TrimSpace(note))
     if len(s) == 0 { return 0, false }
     if s[0] == 'R' { return 0, true }
@@ -166,6 +181,10 @@ func noteToFreq(note string, defaultOctave int) (float64, bool) {
     n := string(s[pos])
     pos++
     if pos < len(s) && s[pos] == '#' { n += "#"; pos++ }
+    // Skip any remaining digits (shouldn't happen if duration was removed, but handle gracefully)
+    for pos < len(s) && s[pos] >= '0' && s[pos] <= '9' {
+        pos++
+    }
     off, ok := noteOffsets[n]
     if !ok { return 0, false }
     // Compute frequency using A4 reference
@@ -181,13 +200,26 @@ func PlayNotes(tokens []string, bpm float64, gain float64) {
     beat := 60.0 / bpm
     go func() {
         for _, t := range tokens {
+            // Check if music should stop
+            mu.Lock()
+            shouldStop := musicStopFlag
+            mu.Unlock()
+            if shouldStop {
+                return // Exit goroutine if stop flag is set
+            }
             s := strings.ToUpper(strings.TrimSpace(t))
             if s == "" { continue }
-            // length = last digit if present
+            // length = last digit if present (e.g., "5E2" = length 2, "5E" = length 1)
             length := 1
-            if last := s[len(s)-1]; last >= '0' && last <= '9' {
-                length = int(last-'0')
-                s = s[:len(s)-1]
+            // Check if last character is a digit
+            if len(s) > 0 {
+                last := s[len(s)-1]
+                if last >= '0' && last <= '9' {
+                    length = int(last - '0')
+                    // Remove the duration digit, but keep note and octave
+                    // For "5E2", we want to remove just the "2", leaving "5E"
+                    s = s[:len(s)-1]
+                }
             }
             dur := float64(length) * beat
             if s == "R" { time.Sleep(time.Duration(dur*1000)*time.Millisecond); continue }

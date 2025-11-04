@@ -17,23 +17,32 @@ function _ENTER()
 end
 
 function _HANDLE_INPUT()
-  -- Navigate menu
-  if rf.btnp(2) then  -- Up
-    selected_option = selected_option - 1
-    if selected_option < 1 then
-      selected_option = #menu_options
-    end
-    rf.sfx("move")
-  elseif rf.btnp(3) then  -- Down
-    selected_option = selected_option + 1
-    if selected_option > #menu_options then
-      selected_option = 1
-    end
-    rf.sfx("move")
-  end
+  -- ============================================================================
+  -- STANDARD INPUT HANDLER TEMPLATE
+  -- ============================================================================
+  -- Universal 11-Button Input System
+  -- Lua receives ONLY button indices (0-10), not keys.
+  -- Key mapping happens at engine level:
+  --   - WASM: Controller sends button indices directly
+  --   - Desktop: Engine maps keyboard to button indices
+  --
+  -- Button Index Reference:
+  --   0 = SELECT
+  --   1 = START
+  --   2 = UP
+  --   3 = DOWN
+  --   4 = LEFT
+  --   5 = RIGHT
+  --   6 = A
+  --   7 = B
+  --   8 = X
+  --   9 = Y
+  --  10 = TURBO
+  -- ============================================================================
   
-  -- Select option
-  if rf.btnp(4) or rf.btnp(5) then  -- Z or X or Enter
+  -- Button 0: SELECT
+  if rf.btnp(0) then
+    -- SELECT confirms menu selection
     if selected_option == 1 then
       -- Resume - pop pause state to return to play
       rf.sfx("select")
@@ -41,10 +50,70 @@ function _HANDLE_INPUT()
     elseif selected_option == 2 then
       -- Quit to menu - pop all states and change to menu
       rf.sfx("select")
+      rf.sfx("stopall") -- Stop all audio
       game.popAllStates()
       game.changeState("menu")
     end
   end
+  
+  -- Button 1: START
+  if rf.btnp(1) then
+    -- START resumes immediately (bypasses menu)
+    rf.sfx("select")
+    game.popState()
+  end
+  
+  -- Button 2: UP
+  if rf.btnp(2) then
+    selected_option = selected_option - 1
+    if selected_option < 1 then
+      selected_option = #menu_options
+    end
+    rf.sfx("select")
+  end
+  
+  -- Button 3: DOWN
+  if rf.btnp(3) then
+    selected_option = selected_option + 1
+    if selected_option > #menu_options then
+      selected_option = 1
+    end
+    rf.sfx("select")
+  end
+  
+  -- Button 4: LEFT
+  -- Not used in pause menu
+  
+  -- Button 5: RIGHT
+  -- Not used in pause menu
+  
+  -- Button 6: A
+  if rf.btnp(6) then
+    -- A button also confirms menu selection (same as SELECT)
+    if selected_option == 1 then
+      -- Resume - pop pause state to return to play
+      rf.sfx("select")
+      game.popState()
+    elseif selected_option == 2 then
+      -- Quit to menu - pop all states and change to menu
+      rf.sfx("select")
+      rf.sfx("stopall") -- Stop all audio
+      game.popAllStates()
+      game.changeState("menu")
+    end
+  end
+  
+  -- Button 7: B
+  -- Not used in pause menu
+  
+  -- Button 8: X
+  -- Not used in pause menu
+  
+  -- Button 9: Y
+  -- Not used in pause menu
+  
+  -- Button 10: TURBO
+  -- Not used in pause menu
 end
 
 function _UPDATE(dt)
@@ -64,8 +133,10 @@ function _DRAW()
   rf.print_anchored("PAUSED", "topcenter", COLOR_LIGHT_GRAY)
   
   -- Menu options
-  local resume_color = (selected_option == 1) and COLOR_WHITE or COLOR_DARK_GRAY
-  local quit_color = (selected_option == 2) and COLOR_WHITE or COLOR_DARK_GRAY
+  -- Use medium gray (30) for unselected, white for selected
+  local COLOR_MEDIUM_GRAY = 30
+  local resume_color = (selected_option == 1) and COLOR_WHITE or COLOR_MEDIUM_GRAY
+  local quit_color = (selected_option == 2) and COLOR_WHITE or COLOR_MEDIUM_GRAY
   
   local resume_x = 240 - (string.len("RESUME") * 3)
   local quit_x = 240 - (string.len("QUIT") * 3)
@@ -85,7 +156,8 @@ function _DRAW()
 end
 
 function _EXIT()
-  -- Cleanup when leaving pause
+  -- Stop all audio when exiting pause state (safety cleanup)
+  rf.sfx("stopall")
 end
 
 function _DONE()

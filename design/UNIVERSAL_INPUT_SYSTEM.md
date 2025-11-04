@@ -25,16 +25,16 @@ A cross-platform 11-button input system that works consistently across desktop, 
 
 | Button | Key Codes                                |
 |--------|------------------------------------------|
-| SELECT | `KeyQ`, `Backspace`                      |
-| START  | `Enter`, `Escape`                        |
-| UP     | `ArrowUp`, `KeyW`                        |
-| DOWN   | `ArrowDown`, `KeyS`                      |
-| LEFT   | `ArrowLeft`, `KeyA`                      |
-| RIGHT  | `ArrowRight`, `KeyD`                     |
-| A      | `KeyZ`, `Space`                          |
-| B      | `KeyX`                                   |
-| X      | `KeyC`                                   |
-| Y      | `KeyV`                                   |
+| SELECT | `Enter`                                  |
+| START  | `Space`                                  |
+| UP     | `ArrowUp`                                |
+| DOWN   | `ArrowDown`                              |
+| LEFT   | `ArrowLeft`                              |
+| RIGHT  | `ArrowRight`                             |
+| A      | `KeyA`                                   |
+| B      | `KeyS`                                   |
+| X      | `KeyZ`                                   |
+| Y      | `KeyX`                                   |
 | TURBO  | `ShiftLeft`, `ShiftRight`               |
 
 ### Mobile/Tablet Support

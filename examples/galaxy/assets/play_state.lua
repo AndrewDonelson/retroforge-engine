@@ -52,11 +52,71 @@ function _ENTER()
 end
 
 function _HANDLE_INPUT()
-  -- Return to menu: Press Z to go back to menu
-  if rf.btnp(4) then  -- Z button
+  -- ============================================================================
+  -- STANDARD INPUT HANDLER TEMPLATE
+  -- ============================================================================
+  -- Universal 11-Button Input System
+  -- Lua receives ONLY button indices (0-10), not keys.
+  -- Key mapping happens at engine level:
+  --   - WASM: Controller sends button indices directly
+  --   - Desktop: Engine maps keyboard to button indices
+  --
+  -- Button Index Reference:
+  --   0 = SELECT
+  --   1 = START
+  --   2 = UP
+  --   3 = DOWN
+  --   4 = LEFT
+  --   5 = RIGHT
+  --   6 = A
+  --   7 = B
+  --   8 = X
+  --   9 = Y
+  --  10 = TURBO
+  -- ============================================================================
+  
+  -- Button 0: SELECT
+  if rf.btnp(0) then
+    -- SELECT returns to menu
+    rf.sfx("stopall") -- Stop all audio
     game.changeState("menu")
     return
   end
+  
+  -- Button 1: START
+  if rf.btnp(1) then
+    -- START also returns to menu
+    rf.sfx("stopall") -- Stop all audio
+    game.changeState("menu")
+    return
+  end
+  
+  -- Button 2: UP
+  -- Not used in play state
+  
+  -- Button 3: DOWN
+  -- Not used in play state
+  
+  -- Button 4: LEFT
+  -- Not used in play state
+  
+  -- Button 5: RIGHT
+  -- Not used in play state
+  
+  -- Button 6: A
+  -- Not used in play state
+  
+  -- Button 7: B
+  -- Not used in play state
+  
+  -- Button 8: X
+  -- Not used in play state
+  
+  -- Button 9: Y
+  -- Not used in play state
+  
+  -- Button 10: TURBO
+  -- Not used in play state
 end
 
 function spawnStar()
@@ -310,7 +370,9 @@ function _DRAW()
 end
 
 function _EXIT()
-  -- Cleanup when leaving
+  -- Stop all audio when exiting play state
+  rf.sfx("stopall")
+  -- Cleanup physics bodies
   for _, star in ipairs(stars) do
     rf.physics_body_destroy(star.body)
   end

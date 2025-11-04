@@ -157,25 +157,155 @@ function _INIT()
   generate_splash_stars()
 end
 
+local music_started = false
+
 function _ENTER()
   splash_time = 0
-  -- Start music (4 seconds)
-  rf.music("space_odyssey")
+  music_started = false
 end
 
 function _HANDLE_INPUT()
-  -- Any input skips splash
-  if rf.btnp(0) or rf.btnp(1) or rf.btnp(2) or rf.btnp(3) or rf.btnp(4) or rf.btnp(5) then
-    game.changeState("menu")
+  -- ============================================================================
+  -- STANDARD INPUT HANDLER TEMPLATE
+  -- ============================================================================
+  -- Universal 11-Button Input System
+  -- Lua receives ONLY button indices (0-10), not keys.
+  -- Key mapping happens at engine level:
+  --   - WASM: Controller sends button indices directly
+  --   - Desktop: Engine maps keyboard to button indices
+  --
+  -- Button Index Reference:
+  --   0 = SELECT
+  --   1 = START
+  --   2 = UP
+  --   3 = DOWN
+  --   4 = LEFT
+  --   5 = RIGHT
+  --   6 = A
+  --   7 = B
+  --   8 = X
+  --   9 = Y
+  --  10 = TURBO
+  -- ============================================================================
+  
+  -- Any button (0-10) skips splash
+  -- Button 0: SELECT
+  if rf.btnp(0) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 1: START
+  if rf.btnp(1) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 2: UP
+  if rf.btnp(2) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 3: DOWN
+  if rf.btnp(3) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 4: LEFT
+  if rf.btnp(4) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 5: RIGHT
+  if rf.btnp(5) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 6: A
+  if rf.btnp(6) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 7: B
+  if rf.btnp(7) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 8: X
+  if rf.btnp(8) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 9: Y
+  if rf.btnp(9) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
+  end
+  
+  -- Button 10: TURBO
+  if rf.btnp(10) then
+    rf.sfx("stopall") -- Stop all audio before transition
+    if game then
+      game.changeState("menu")
+    end
+    return
   end
 end
 
 function _UPDATE(dt)
   splash_time = splash_time + dt
   
+  -- Start music on first update (similar to menu state)
+  if not music_started then
+    rf.music("space_odyssey")
+    music_started = true
+  end
+  
   -- Auto-transition after duration
   if splash_time >= splash_duration then
-    game.changeState("menu")
+    -- Stop all audio before transition
+    rf.sfx("stopall")
+    -- Transition to menu
+    if game then
+      game.changeState("menu")
+    end
   end
 end
 
@@ -211,8 +341,8 @@ function _DRAW()
 end
 
 function _EXIT()
-  -- Stop music
-  rf.music_stop()
+  -- Stop all audio before exiting splash
+  rf.sfx("stopall")
 end
 
 function _DONE()

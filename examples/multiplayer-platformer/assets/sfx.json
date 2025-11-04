@@ -1,33 +1,7 @@
 {
-  "jump": {
-    "type": "sine",
-    "freq": 440,
-    "duration": 0.1,
-    "gain": 0.25
-  },
-  "land": {
-    "type": "sine",
-    "freq": 220,
-    "duration": 0.08,
-    "gain": 0.2
-  },
-  "select": {
-    "type": "sine",
-    "freq": 660,
-    "duration": 0.06,
-    "gain": 0.3
-  },
-  "move": {
-    "type": "sine",
-    "freq": 520,
-    "duration": 0.04,
-    "gain": 0.15
-  },
-  "fall": {
-    "type": "noise",
-    "freq": 0,
-    "duration": 0.2,
-    "gain": 0.3
-  }
+  "jump": ["S004D02G2"],
+  "land": ["S002D01G2"],
+  "select": ["S007D01G2"],
+  "move": ["S005D01G1"],
+  "fall": ["N000D03G2"]
 }
-

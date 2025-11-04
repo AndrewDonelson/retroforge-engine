@@ -117,6 +117,7 @@ var noteOffsets = map[string]int{
 
 func noteToFreq(note string, defaultOctave int) (float64, bool) {
 	// Formats: "1G#2" (octave-note-len) or "G#2" (note-len) or "R2" (rest)
+	// Note: duration digit is removed before calling this function
 	s := strings.ToUpper(strings.TrimSpace(note))
 	if len(s) == 0 {
 		return 0, false
@@ -137,6 +138,10 @@ func noteToFreq(note string, defaultOctave int) (float64, bool) {
 	pos++
 	if pos < len(s) && s[pos] == '#' {
 		n += "#"
+		pos++
+	}
+	// Skip any remaining digits (shouldn't happen if duration was removed, but handle gracefully)
+	for pos < len(s) && s[pos] >= '0' && s[pos] <= '9' {
 		pos++
 	}
 	off, ok := noteOffsets[n]
@@ -162,11 +167,17 @@ func PlayNotes(tokens []string, bpm float64, gain float64) {
 			if s == "" {
 				continue
 			}
-			// length = last digit if present
+			// length = last digit if present (e.g., "5E2" = length 2, "5E" = length 1)
 			length := 1
-			if last := s[len(s)-1]; last >= '0' && last <= '9' {
-				length = int(last - '0')
-				s = s[:len(s)-1]
+			// Check if last character is a digit
+			if len(s) > 0 {
+				last := s[len(s)-1]
+				if last >= '0' && last <= '9' {
+					length = int(last - '0')
+					// Remove the duration digit, but keep note and octave
+					// For "5E2", we want to remove just the "2", leaving "5E"
+					s = s[:len(s)-1]
+				}
 			}
 			dur := float64(length) * beat
 			if s == "R" {

@@ -77,27 +77,89 @@ function _ENTER()
 end
 
 function _HANDLE_INPUT()
-  -- Return to menu: Press Z to go back to menu
-  if rf.btnp(4) then  -- Z button
-    game.changeState("menu")  -- Go back to menu, NOT exit
+  -- ============================================================================
+  -- STANDARD INPUT HANDLER TEMPLATE
+  -- ============================================================================
+  -- Universal 11-Button Input System
+  -- Lua receives ONLY button indices (0-10), not keys.
+  -- Key mapping happens at engine level:
+  --   - WASM: Controller sends button indices directly
+  --   - Desktop: Engine maps keyboard to button indices
+  --
+  -- Button Index Reference:
+  --   0 = SELECT
+  --   1 = START
+  --   2 = UP
+  --   3 = DOWN
+  --   4 = LEFT
+  --   5 = RIGHT
+  --   6 = A
+  --   7 = B
+  --   8 = X
+  --   9 = Y
+  --  10 = TURBO
+  -- ============================================================================
+  
+  -- Button 0: SELECT
+  if rf.btnp(0) then
+    -- SELECT returns to menu
+    rf.sfx("stopall") -- Stop all audio
+    game.changeState("menu")
     return
   end
   
-  -- Spawn ball on arrow keys from that direction (buttons: 0=Left, 1=Right, 2=Up, 3=Down)
-  -- Only spawn if under limit (active ball count)
-  if ball_count < balls_max then
-    if rf.btnp(2) then  -- Up arrow
-      spawnBallFromDirection("up")
-    elseif rf.btnp(3) then  -- Down arrow
-      spawnBallFromDirection("down")
-    elseif rf.btnp(0) then  -- Left arrow
-      spawnBallFromDirection("left")
-    elseif rf.btnp(1) then  -- Right arrow
-      spawnBallFromDirection("right")
-    elseif rf.btnp(5) then  -- X button spawns from center
-      spawnBall()
-    end
+  -- Button 1: START
+  if rf.btnp(1) then
+    -- START also returns to menu
+    rf.sfx("stopall") -- Stop all audio
+    game.changeState("menu")
+    return
   end
+  
+  -- Button 2: UP
+  -- Spawn ball from top direction
+  if ball_count < balls_max and rf.btnp(2) then
+    spawnBallFromDirection("up")
+  end
+  
+  -- Button 3: DOWN
+  -- Spawn ball from bottom direction
+  if ball_count < balls_max and rf.btnp(3) then
+    spawnBallFromDirection("down")
+  end
+  
+  -- Button 4: LEFT
+  -- Spawn ball from left direction
+  if ball_count < balls_max and rf.btnp(4) then
+    spawnBallFromDirection("left")
+  end
+  
+  -- Button 5: RIGHT
+  -- Spawn ball from right direction
+  if ball_count < balls_max and rf.btnp(5) then
+    spawnBallFromDirection("right")
+  end
+  
+  -- Button 6: A
+  -- Spawn ball from center
+  if ball_count < balls_max and rf.btnp(6) then
+    spawnBall()
+  end
+  
+  -- Button 7: B
+  -- Not used in play state
+  
+  -- Button 8: X
+  -- Spawn ball from center (alternative)
+  if ball_count < balls_max and rf.btnp(8) then
+    spawnBall()
+  end
+  
+  -- Button 9: Y
+  -- Not used in play state
+  
+  -- Button 10: TURBO
+  -- Not used in play state
 end
 
 function spawnBall()
@@ -337,6 +399,8 @@ function _DRAW()
 end
 
 function _EXIT()
+  -- Stop all audio when exiting play state
+  rf.sfx("stopall")
   -- Cleanup physics bodies when leaving
   for _, ball in ipairs(balls) do
     -- Bodies will be cleaned up by engine
