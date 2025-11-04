@@ -1,0 +1,10 @@
+{
+  "engine": ["L045D16G2"],
+  "crash": ["N000D08G3"],
+  "shift": ["S044D02G2"],
+  "checkpoint": ["S055D04G3"],
+  "countdown": ["S066D02G2", "S077D02G2", "S088D02G2", "S099D04G3"],
+  "select": ["S007D01G2"],
+  "stopall": ["STOPALL"]
+}
+

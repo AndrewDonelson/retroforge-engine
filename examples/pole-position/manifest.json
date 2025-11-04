@@ -1,0 +1,28 @@
+{
+  "enabled": false,
+  "minPlayers": 1,
+  "maxPlayers": 1,
+  "supportsSolo": true,
+  "hasMultiplayer": false,
+  "fullManifest": {
+    "title": "Pole Position",
+    "author": "RetroForge",
+    "description": "A classic arcade racing game with 10 procedural tracks. Race to the finish!",
+    "genre": "Racing",
+    "tags": ["racing", "arcade", "procedural"],
+    "entry": "main.lua",
+    "palette": "Super Mario 50",
+    "scale": 1
+  },
+  "manifestKeys": [
+    "title",
+    "author",
+    "description",
+    "genre",
+    "tags",
+    "entry",
+    "palette",
+    "scale"
+  ]
+}
+
