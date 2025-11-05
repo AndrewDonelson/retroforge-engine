@@ -4,10 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"path"
 	"sort"
 )
+
+// MaxCartSize is the maximum allowed cart file size (512KB)
+const MaxCartSize = 512 * 1024 // 512KB
 
 // Manifest is the minimal metadata stored in an .rfs
 type Manifest struct {
@@ -101,6 +105,14 @@ type ReadResult struct {
 
 // Read unpacks an .rfs archive into a manifest, sfx, music, and asset map.
 func Read(r io.ReaderAt, size int64) (ReadResult, error) {
+	// Validate cart size limit (512KB)
+	if size > MaxCartSize {
+		return ReadResult{}, errors.New("cart size exceeds maximum limit of 512KB")
+	}
+	if size < 0 {
+		return ReadResult{}, errors.New("cart size cannot be negative")
+	}
+	
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
 		return ReadResult{}, err

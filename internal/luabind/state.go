@@ -10,7 +10,7 @@ type State struct {
 	memory    []byte   // Memory for poke/peek (default 2MB like PICO-8)
 	palRemap  [256]int // Color remapping: palRemap[oldIndex] = newIndex
 	palActive bool     // Whether color remapping is active
-	cartStore []byte   // Cart storage for cstore/reload (default 64KB like PICO-8)
+	cartStore []byte   // Cart storage for cstore/reload (512KB, 16x PICO-8's 32KB)
 	cursorX   int      // Text cursor X position
 	cursorY   int      // Text cursor Y position
 	textColor int      // Text color index (-1 = use default)
@@ -24,7 +24,7 @@ func NewState() *State {
 	s := &State{
 		tileMap:   graphics.NewTileMap(256, 256), // Default 256×256 tilemap
 		memory:    make([]byte, 2*1024*1024),     // 2MB like PICO-8
-		cartStore: make([]byte, 64*1024),         // 64KB cart storage (2x PICO-8's 32KB)
+		cartStore: make([]byte, 512*1024),         // 512KB cart storage (16x PICO-8's 32KB)
 		palRemap:  [256]int{},                    // Will be initialized to identity mapping
 		palActive: false,
 		cursorX:   0,

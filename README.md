@@ -141,7 +141,7 @@ make run-dev FOLDER=examples/moon-lander
 
 ### Memory & Persistence
 - **2MB runtime memory**: Access via `poke`/`peek` functions
-- **64KB cart storage**: Persistent storage (2x PICO-8's 32KB)
+- **512KB cart storage**: Persistent storage (16x PICO-8's 32KB)
 - **Cart persistence**: Save/load game state with `cstore()`/`reload()`
 
 ### State Machine (NEW!)
@@ -297,7 +297,7 @@ end
 |---------|--------|------------|
 | **Resolution** | 128×128 | 480×270 ✅ |
 | **Palette** | 16 colors | 50 colors ✅ |
-| **Cart Size** | 32 KB | 64 KB ✅ |
+| **Cart Size** | 32 KB | 512 KB ✅ |
 | **Audio Channels** | 4 | 8 ✅ |
 | **Physics** | Manual | Box2D ✅ |
 | **Multiplayer** | Built-in | WebRTC (up to 6) ✅ |

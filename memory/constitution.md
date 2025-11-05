@@ -114,6 +114,17 @@ RetroForge Engine provides a modern, cross-platform runtime for creating retro-s
   function _DONE() end
   ```
 
+### Palette System
+- **50 colors per palette** (indices 0-49, -1 for transparent)
+- **State-based palette switching:** Each state can load and use a different palette
+  - Each state handles its own drawing, so states can switch palettes independently
+  - Only **one palette is active at a time** (cannot have 2 palettes simultaneously)
+  - Allows developers to use more than 50 colors across the entire game, but only 50 at a time
+  - Perfect for: different moods per level/state, day/night cycles, animated color transitions
+- **Palette switching:** Use `rf.palette_set(name)` in `_ENTER()` or `_UPDATE()` to switch palettes
+- **Palette affects all drawing:** All drawing operations (sprites, primitives, text) use the currently active palette
+- **Sprite indices remain constant:** Sprite pixel data uses indices 0-49, but actual colors change based on active palette
+
 ---
 
 ## 🚀 Development Philosophy
