@@ -36,7 +36,7 @@ type Engine struct {
 	sfxMap      cartio.SFXMap
 	musicMap    cartio.MusicMap
 	spritesMap  cartio.SpriteMap
-	tilesetsMap map[string]cartio.TilesetMap // Map of tileset name -> tileset data
+	tilesetsMap map[string]*cartio.TilesetData // Map of tileset name -> tileset data (includes isISO flag)
 	tilemapsMap map[string]*cartio.TileMapData // Map of tilemap name -> tilemap data
 	devMode     *DevMode // Development mode (only when loading from folder)
 }
@@ -64,7 +64,7 @@ func New(targetFPS int) *Engine {
 		Physics:    phys,
 		Network:    network.NewNetworkManager(),
 		GSM:        gsm,
-		tilesetsMap: make(map[string]cartio.TilesetMap),
+		tilesetsMap: make(map[string]*cartio.TilesetData),
 		tilemapsMap: make(map[string]*cartio.TileMapData),
 	}
 	// On each tick, call Lua update with dt seconds.
@@ -302,6 +302,42 @@ func (e *Engine) LoadCartFromReader(r io.ReaderAt, size int64) error {
 	e.sfxMap = result.SFX
 	e.musicMap = result.Music
 	e.spritesMap = result.Sprites
+
+	// Load Tilesets and Tilemaps from cart archive
+	// Scan result.Files for *_tiles.json and *_map.json patterns
+	e.tilesetsMap = make(map[string]*cartio.TilesetData)
+	e.tilemapsMap = make(map[string]*cartio.TileMapData)
+	
+	for path, data := range result.Files {
+		// Only process assets/ files
+		if len(path) < 8 || path[:7] != "assets/" {
+			continue
+		}
+		
+		name := path[7:] // Remove "assets/" prefix
+		
+		// Load tilesets (*_tiles.json)
+		if len(name) > 11 && name[len(name)-11:] == "_tiles.json" {
+			tilesetName := name[:len(name)-11] // Remove _tiles.json extension
+			if err := e.loadTilesetFromBytes(tilesetName, data); err != nil {
+				// Log error but continue (non-fatal)
+				if e.devMode != nil {
+					e.devMode.AddDebugLog(fmt.Sprintf("Failed to load tileset '%s' from cart: %v", tilesetName, err))
+				}
+			}
+		}
+		
+		// Load tilemaps (*_map.json)
+		if len(name) > 9 && name[len(name)-9:] == "_map.json" {
+			tilemapName := name[:len(name)-9] // Remove _map.json extension
+			if err := e.loadTilemapFromBytes(tilemapName, data); err != nil {
+				// Log error but continue (non-fatal)
+				if e.devMode != nil {
+					e.devMode.AddDebugLog(fmt.Sprintf("Failed to load tilemap '%s' from cart: %v", tilemapName, err))
+				}
+			}
+		}
+	}
 
 	// Register Lua bindings first (creates rf table)
 	e.registerLuaBindings()

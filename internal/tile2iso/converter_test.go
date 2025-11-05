@@ -300,25 +300,32 @@ func TestScaleSideFace(t *testing.T) {
 	// Create a test image
 	testImg := createTestImage(8, 16, color.RGBA{R: 255, G: 0, B: 0, A: 255})
 
-	// Test scaling down
-	scaled := scaleSideFace(testImg, 8)
+	// Test scaling down (width and height)
+	scaled := scaleSideFace(testImg, 4, 8)
 	bounds := scaled.Bounds()
-	if bounds.Dy() != 8 {
-		t.Errorf("expected height 8, got %d", bounds.Dy())
+	if bounds.Dx() != 4 || bounds.Dy() != 8 {
+		t.Errorf("expected 4x8, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
 
 	// Test scaling up
-	scaled = scaleSideFace(testImg, 32)
+	scaled = scaleSideFace(testImg, 16, 32)
 	bounds = scaled.Bounds()
-	if bounds.Dy() != 32 {
-		t.Errorf("expected height 32, got %d", bounds.Dy())
+	if bounds.Dx() != 16 || bounds.Dy() != 32 {
+		t.Errorf("expected 16x32, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
 
 	// Test same size
-	scaled = scaleSideFace(testImg, 16)
+	scaled = scaleSideFace(testImg, 8, 16)
 	bounds = scaled.Bounds()
-	if bounds.Dy() != 16 {
-		t.Errorf("expected height 16, got %d", bounds.Dy())
+	if bounds.Dx() != 8 || bounds.Dy() != 16 {
+		t.Errorf("expected 8x16, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+	
+	// Test isometric tile side face dimensions (32x16 for 64-wide tile)
+	scaled = scaleSideFace(testImg, 32, 16)
+	bounds = scaled.Bounds()
+	if bounds.Dx() != 32 || bounds.Dy() != 16 {
+		t.Errorf("expected 32x16 for isometric side face, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
 }
 

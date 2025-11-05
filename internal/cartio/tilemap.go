@@ -12,4 +12,5 @@ type TileMap struct {
 type TileMapData struct {
 	TileMap
 	Tileset TilesetMap // The loaded tileset for this map
+	IsISO   bool       // Whether this tilemap uses isometric rendering (from tileset)
 }

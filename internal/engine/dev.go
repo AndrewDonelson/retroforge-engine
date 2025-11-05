@@ -27,6 +27,11 @@ type DevMode struct {
 	debugMaxLogs   int
 	stats          DevStats
 	isReloading    bool // Flag to indicate reload is in progress
+	// Smart logging: deduplicate and throttle messages
+	seenMessages   map[string]time.Time // Track when we last saw each message
+	logThrottle    time.Duration         // Minimum time between identical messages
+	lastLogTime    time.Time             // Last time we logged anything
+	minLogInterval time.Duration         // Minimum time between any logs
 }
 
 // DevStats holds debugging statistics
@@ -47,6 +52,9 @@ func NewDevMode() *DevMode {
 		reloadCooldown: 500 * time.Millisecond, // Cooldown to avoid rapid reloads
 		debugMaxLogs:   100,
 		debugLogs:      make([]string, 0, 100),
+		seenMessages:   make(map[string]time.Time),
+		logThrottle:    5 * time.Second,        // Only log same message once per 5 seconds
+		minLogInterval: 100 * time.Millisecond, // Minimum 100ms between any logs
 	}
 }
 
@@ -147,18 +155,57 @@ func (dm *DevMode) CheckForReload() bool {
 	return false
 }
 
-// AddDebugLog adds a debug log message
+// AddDebugLog adds a debug log message with smart deduplication and throttling
+// When Hot-Reload is enabled, logs are printed to console
+// Messages are deduplicated: identical messages are only logged once per logThrottle period
+// Additionally, there's a minimum interval between any logs to prevent spam
 func (dm *DevMode) AddDebugLog(msg string) {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 
-	timestamp := time.Now().Format("15:04:05")
+	now := time.Now()
+
+	// Check if we should throttle this specific message
+	if lastSeen, exists := dm.seenMessages[msg]; exists {
+		if now.Sub(lastSeen) < dm.logThrottle {
+			// Message was recently logged, skip it
+			return
+		}
+	}
+
+	// Check minimum interval between any logs
+	if now.Sub(dm.lastLogTime) < dm.minLogInterval {
+		// Too soon since last log, skip it
+		return
+	}
+
+	// Update tracking
+	dm.seenMessages[msg] = now
+	dm.lastLogTime = now
+
+	// Clean up old entries from seenMessages (keep it bounded)
+	if len(dm.seenMessages) > 1000 {
+		// Remove entries older than 1 minute
+		cutoff := now.Add(-1 * time.Minute)
+		for msg, seen := range dm.seenMessages {
+			if seen.Before(cutoff) {
+				delete(dm.seenMessages, msg)
+			}
+		}
+	}
+
+	timestamp := now.Format("15:04:05")
 	logMsg := fmt.Sprintf("[%s] %s", timestamp, msg)
 	dm.debugLogs = append(dm.debugLogs, logMsg)
 
 	// Keep only last N logs
 	if len(dm.debugLogs) > dm.debugMaxLogs {
 		dm.debugLogs = dm.debugLogs[len(dm.debugLogs)-dm.debugMaxLogs:]
+	}
+
+	// Print to console when Hot-Reload is enabled
+	if dm.enabled {
+		fmt.Println(logMsg)
 	}
 }
 
@@ -314,7 +361,7 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 	}
 
 	// Load Tilesets (scan for *_tiles.json files)
-	e.tilesetsMap = make(map[string]cartio.TilesetMap)
+	e.tilesetsMap = make(map[string]*cartio.TilesetData)
 	if entries, err := os.ReadDir(assetsPathForRPI); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() {
@@ -325,9 +372,19 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 			if len(name) > 11 && name[len(name)-11:] == "_tiles.json" {
 				tilesetName := name[:len(name)-11] // Remove _tiles.json extension
 				tilesetPath := filepath.Join(assetsPathForRPI, name)
+				if e.devMode != nil && e.devMode.IsEnabled() {
+					e.devMode.AddDebugLog(fmt.Sprintf("Found tileset file: '%s' -> loading as '%s'", name, tilesetName))
+				}
 				if err := e.loadTileset(tilesetName, tilesetPath); err != nil {
 					if e.devMode != nil {
 						e.devMode.AddDebugLog(fmt.Sprintf("Failed to load tileset '%s': %v", tilesetName, err))
+					}
+				} else {
+					if e.devMode != nil && e.devMode.IsEnabled() {
+						tilesetData := e.tilesetsMap[tilesetName]
+						if tilesetData != nil {
+							e.devMode.AddDebugLog(fmt.Sprintf("Successfully loaded tileset '%s' (IsISO=%v, %d tiles)", tilesetName, tilesetData.IsISO, len(tilesetData.Tiles)))
+						}
 					}
 				}
 			}
@@ -346,6 +403,9 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 			if len(name) > 9 && name[len(name)-9:] == "_map.json" {
 				tilemapName := name[:len(name)-9] // Remove _map.json extension
 				tilemapPath := filepath.Join(assetsPathForRPI, name)
+				if e.devMode != nil && e.devMode.IsEnabled() {
+					e.devMode.AddDebugLog(fmt.Sprintf("Found tilemap file: '%s' -> loading as '%s'", name, tilemapName))
+				}
 				if err := e.loadTilemap(tilemapName, tilemapPath); err != nil {
 					if e.devMode != nil {
 						e.devMode.AddDebugLog(fmt.Sprintf("Failed to load tilemap '%s': %v", tilemapName, err))

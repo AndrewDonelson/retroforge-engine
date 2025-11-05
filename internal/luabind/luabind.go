@@ -3,6 +3,7 @@ package luabind
 import (
 	"fmt"
 	"image/color"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,6 +86,14 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 
 	// Store devMode in closure for debug functions
 	devModePtr := devMode
+	
+	// Helper function for debug logging (only logs when dev mode is enabled)
+	debugLog := func(format string, args ...interface{}) {
+		if devModePtr != nil && devModePtr.IsEnabled() {
+			msg := fmt.Sprintf(format, args...)
+			devModePtr.AddDebugLog(msg)
+		}
+	}
 
 	// Create pool manager for automatic sprite pooling
 	poolManager := spritepool.NewPoolManager()
@@ -2446,32 +2455,66 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		// Get tilemap
 		tilemapData, exists := (*tilemapsMapPtr)[mapName]
 		if !exists {
-			return 0 // Tilemap not found, do nothing
+			debugLog("drawTilemap: Tilemap '%s' not found", mapName)
+			// List available tilemaps for debugging
+			availableMaps := make([]string, 0, len(*tilemapsMapPtr))
+			for name := range *tilemapsMapPtr {
+				availableMaps = append(availableMaps, name)
+			}
+			debugLog("drawTilemap: Available tilemaps: %v", availableMaps)
+			return 0
+		}
+		
+		// Only log tilemap info once (smart logging will deduplicate)
+		debugLog("drawTilemap: Found tilemap '%s', IsISO=%v", mapName, tilemapData.IsISO)
+		
+		// Check if tileset is empty
+		if len(tilemapData.Tileset) == 0 {
+			debugLog("drawTilemap: ERROR - Tileset is empty for tilemap '%s'", mapName)
+			return 0
+		}
+		
+		// Check if tilemap has any tiles
+		if len(tilemapData.Tiles) == 0 || len(tilemapData.Tiles[0]) == 0 {
+			debugLog("drawTilemap: ERROR - Tilemap '%s' is empty", mapName)
+			return 0
 		}
 
-		// Check if this is an isometric tileset (by checking first non-empty tile)
-		isIsometric := false
+		// Get first tile to determine tile dimensions (for isometric calculations)
+		var tileWidth, tileHeight int
 		for _, row := range tilemapData.Tiles {
 			for _, tileName := range row {
 				if tileName != "" {
 					if tile, exists := tilemapData.Tileset[tileName]; exists {
-						// Isometric tiles have height = width/2 (characteristic after conversion)
-						if tile.Height > 0 && tile.Width > 0 {
-							expectedHeight := tile.Width / 2
-							if tile.Height == expectedHeight || tile.Height == expectedHeight+1 || tile.Height == expectedHeight-1 {
-								isIsometric = true
-							}
-						}
+						tileWidth = tile.Width
+						tileHeight = tile.Height
+						break
 					}
-					break
 				}
 			}
-			if isIsometric {
+			if tileWidth > 0 {
 				break
 			}
 		}
+		
+		// If we couldn't find a tile, can't render
+		if tileWidth == 0 || tileHeight == 0 {
+			debugLog("drawTilemap: ERROR - Could not determine tile dimensions (width=%d, height=%d)", tileWidth, tileHeight)
+			return 0
+		}
 
-		// Draw each tile in the map
+		// Draw each tile in the map (sorted back-to-front for isometric)
+		type tileRenderInfo struct {
+			gridX    int
+			gridY    int
+			tileName string
+			screenX  int
+			screenY  int
+		}
+
+		renderQueue := make([]tileRenderInfo, 0)
+
+		// Build render queue
 		for mapY, row := range tilemapData.Tiles {
 			for mapX, tileName := range row {
 				if tileName == "" {
@@ -2486,50 +2529,133 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 
 				// Calculate screen position
 				var screenX, screenY int
-				if isIsometric {
-					// Isometric positioning: staggered diamond pattern
-					// X: offset by half tile width for each row/column
-					// Y: offset by half tile height for each row/column
-					screenX = offsetX + (mapX-mapY)*(tile.Width/2)
-					screenY = offsetY + (mapX+mapY)*(tile.Height/2)
+				if tilemapData.IsISO {
+					// Isometric positioning using basis vectors
+					// For 32×24 isometric tiles (2:1 ratio):
+					// - TileWidth: 32 (full tile width)
+					// - DiamondHeight: 16 (height of top diamond face, not full tile height)
+					// - Full tile height is 24 (16 diamond + 8 side faces)
+					// Basis vectors:
+					// i_hat: (tileWidth/2, diamondHeight/2) = (16, 8) for 32×24 tiles
+					// j_hat: (-tileWidth/2, diamondHeight/2) = (-16, 8) for 32×24 tiles
+					// screen = (gridX * i_hat) + (gridY * j_hat) + offset
+					
+					// Calculate diamond height (for 2:1 isometric ratio: width/2)
+					diamondHeight := tileWidth / 2  // 32 / 2 = 16 for 32×24 tiles
+					
+					// Basis vectors
+					iHatX := float64(tileWidth) / 2.0      // 16
+					iHatY := float64(diamondHeight) / 2.0  // 8
+					jHatX := -float64(tileWidth) / 2.0     // -16
+					jHatY := float64(diamondHeight) / 2.0  // 8
+
+					// Matrix transformation: screen = (gridX * i_hat) + (gridY * j_hat)
+					screenX = int(float64(mapX)*iHatX + float64(mapY)*jHatX)
+					screenY = int(float64(mapX)*iHatY + float64(mapY)*jHatY)
+
+					// Apply origin offset
+					// For isometric, anchor is at the top center of the diamond
+					screenX += offsetX - (tileWidth / 2)
+					screenY += offsetY
+
+					// Add to render queue for depth sorting
+					renderQueue = append(renderQueue, tileRenderInfo{
+						gridX:    mapX,
+						gridY:    mapY,
+						tileName: tileName,
+						screenX:  screenX,
+						screenY:  screenY,
+					})
 				} else {
 					// Normal orthogonal positioning: simple grid
 					screenX = offsetX + mapX*tile.Width
 					screenY = offsetY + mapY*tile.Height
-				}
 
-				// Draw tile using rf.spr (treat tiles as sprites)
-				// For now, we'll draw the tile directly pixel by pixel
-				// Get tile pixels (handle static/frames/animation)
-				var pixels [][]int
-				switch tile.Type {
-				case cartio.SpriteTypeStatic:
-					pixels = tile.Pixels
-				case cartio.SpriteTypeFrames, cartio.SpriteTypeAnimation:
-					// For frames/animation, use first frame
-					if len(tile.Frames) > 0 {
-						pixels = tile.Frames[0].Pixels
-					} else {
-						continue
-					}
-				default:
+					// Add to render queue (no sorting needed for orthogonal)
+					renderQueue = append(renderQueue, tileRenderInfo{
+						gridX:    mapX,
+						gridY:    mapY,
+						tileName: tileName,
+						screenX:  screenX,
+						screenY:  screenY,
+					})
+				}
+			}
+		}
+
+		// Sort isometric tiles back-to-front (gridX + gridY)
+		if tilemapData.IsISO {
+			sort.Slice(renderQueue, func(i, j int) bool {
+				return renderQueue[i].gridX+renderQueue[i].gridY < renderQueue[j].gridX+renderQueue[j].gridY
+			})
+		}
+
+		// Render all tiles
+		tilesDrawn := 0
+		pixelsDrawn := 0
+		for _, tileInfo := range renderQueue {
+			tile, exists := tilemapData.Tileset[tileInfo.tileName]
+			if !exists {
+				continue
+			}
+
+			// Draw tile using rf.spr (treat tiles as sprites)
+			// For now, we'll draw the tile directly pixel by pixel
+			// Get tile pixels (handle static/frames/animation)
+			var pixels [][]int
+			switch tile.Type {
+			case cartio.SpriteTypeStatic:
+				pixels = tile.Pixels
+			case cartio.SpriteTypeFrames, cartio.SpriteTypeAnimation:
+				// For frames/animation, use first frame
+				if len(tile.Frames) > 0 {
+					pixels = tile.Frames[0].Pixels
+				} else {
 					continue
 				}
+			default:
+				continue
+			}
 
-				// Draw tile pixels
-				for ty, pixelRow := range pixels {
-					for tx, colorIdx := range pixelRow {
-						if colorIdx >= 0 && colorIdx < 50 {
-							px := screenX + tx
-							py := screenY + ty
-							if px >= 0 && px < 480 && py >= 0 && py < 270 {
-								c := colorByIndexRemapped(colorIdx)
-								r.PSet(px, py, color.RGBA{c[0], c[1], c[2], c[3]})
-							}
+			// Draw tile pixels
+			// Validate pixels array dimensions
+			if len(pixels) != tile.Height {
+				debugLog("drawTilemap: Tile '%s' has invalid pixel height: %d (expected %d)", tileInfo.tileName, len(pixels), tile.Height)
+				continue // Skip invalid tile
+			}
+			tilePixelsDrawn := 0
+			for ty, pixelRow := range pixels {
+				if len(pixelRow) != tile.Width {
+					debugLog("drawTilemap: Tile '%s' row %d has invalid width: %d (expected %d)", tileInfo.tileName, ty, len(pixelRow), tile.Width)
+					continue // Skip invalid row
+				}
+				for tx, colorIdx := range pixelRow {
+					// Skip transparent pixels (colorIdx < 0)
+					if colorIdx < 0 {
+						continue
+					}
+					// Valid color index is 0-49
+					if colorIdx >= 0 && colorIdx < 50 {
+						px := tileInfo.screenX + tx
+						py := tileInfo.screenY + ty
+						// Only draw if within screen bounds
+						if px >= 0 && px < 480 && py >= 0 && py < 270 {
+							c := colorByIndexRemapped(colorIdx)
+							r.PSet(px, py, color.RGBA{c[0], c[1], c[2], c[3]})
+							tilePixelsDrawn++
+							pixelsDrawn++
 						}
 					}
 				}
 			}
+			if tilePixelsDrawn > 0 {
+				tilesDrawn++
+			}
+		}
+		
+		// Only log if there's an issue (no tiles drawn) or very rarely (smart logging will throttle)
+		if tilesDrawn == 0 {
+			debugLog("drawTilemap: WARNING - No tiles drawn for tilemap '%s'", mapName)
 		}
 
 		return 0

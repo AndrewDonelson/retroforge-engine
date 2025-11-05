@@ -28,6 +28,7 @@ func ConvertCmd() *cobra.Command {
 		lightingMode  string
 		tileWidth     int
 		tileHeight    int
+		showOutline   bool
 		updateSprites bool
 	)
 
@@ -84,10 +85,11 @@ you can specify which frame to use with --top-frame, --left-frame, --right-frame
 				LightingMode: mode,
 				TileWidth:    tileWidth,
 				TileHeight:   tileHeight,
+				ShowOutline:  showOutline,
 			}
 
-			// Create converter
-			converter := tile2iso.NewIsometricConverter(64, 32)
+			// Create converter with default dimensions (32×24 output tiles)
+			converter := tile2iso.NewIsometricConverter(32, 16)
 
 			// Generate isometric tile
 			resultSprite, err := converter.CreateIsometricTile(
@@ -160,10 +162,11 @@ you can specify which frame to use with --top-frame, --left-frame, --right-frame
 	cmd.Flags().StringVar(&leftFrame, "left-frame", "", "Frame name for left sprite (for frames/animation types)")
 	cmd.Flags().StringVar(&rightFrame, "right-frame", "", "Frame name for right sprite (for frames/animation types)")
 	cmd.Flags().StringVar(&tileName, "name", "", "Name for output tile sprite (default: {top}_{left}_{right}_iso)")
-	cmd.Flags().IntVar(&height, "height", 16, "Height of side faces in pixels")
+	cmd.Flags().IntVar(&height, "height", 8, "Height of side faces in pixels (default: 8 for 32×24 tiles)")
 	cmd.Flags().StringVar(&lightingMode, "lighting", "gradient", "Lighting mode: normal, basic, full, gradient")
-	cmd.Flags().IntVar(&tileWidth, "tile-width", 64, "Width of isometric tile")
-	cmd.Flags().IntVar(&tileHeight, "tile-height", 32, "Height of isometric tile (top face)")
+	cmd.Flags().IntVar(&tileWidth, "tile-width", 32, "Width of isometric tile (default: 32 for 32×24 tiles)")
+	cmd.Flags().IntVar(&tileHeight, "tile-height", 16, "Height of isometric tile top face (default: 16 for 32×24 tiles)")
+	cmd.Flags().BoolVar(&showOutline, "show-outline", false, "Draw dark outlines around tile faces (top diamond and side parallelograms)")
 	cmd.Flags().BoolVar(&updateSprites, "update", false, "Update sprites.json with new tile (instead of creating separate file)")
 
 	return cmd

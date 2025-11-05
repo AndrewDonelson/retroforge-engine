@@ -112,16 +112,21 @@ function _DRAW()
     offsetY = (270 - mapHeight) / 2
   else
     -- Isometric tilemap: center the diamond shape
-    -- For 10x10 isometric map with 16x8 tiles (after conversion):
-    -- Formula: screenX = offsetX + (mapX-mapY)*(tile.Width/2)
-    --          screenY = offsetY + (mapX+mapY)*(tile.Height/2)
-    -- 
-    -- Center of diamond in map coordinates is at (mapX=4.5, mapY=4.5)
-    -- This maps to: screenX = offsetX + 0, screenY = offsetY + 36
-    -- To center at screen center (240, 135):
-    offsetX = 240  -- Center X of diamond aligns with screen center X
-    offsetY = 135 - 36  -- Center Y of diamond (at Y=36 relative to offset) aligns with screen center Y
+    -- For 16x16 isometric map with 32×24 tiles:
+    -- Basis vectors: i_hat = (16, 8), j_hat = (-16, 8)
+    -- For center tile at grid (7.5, 7.5):
+    -- screenX_base = 7.5*16 + 7.5*(-16) = 0
+    -- screenY_base = 7.5*8 + 7.5*8 = 120
+    -- Final: screenX = 0 + offsetX - 16, screenY = 120 + offsetY
+    -- To center at (240, 135):
+    -- offsetX - 16 = 240, so offsetX = 256
+    -- 120 + offsetY = 135, so offsetY = 15
+    offsetX = 256  -- Center X accounting for tile anchor point (-16)
+    offsetY = 15   -- Center Y accounting for map center position (120 -> 135)
   end
+  
+  -- Debug: draw a test rectangle to verify drawing works
+  -- rf.rect(10, 10, 20, 20, 1)  -- White rectangle at top-left
   
   rf.drawTilemap(mapName, offsetX, offsetY)
   

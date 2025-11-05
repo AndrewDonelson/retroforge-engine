@@ -7,7 +7,7 @@
   "fullManifest": {
     "title": "Hello",
     "author": "RetroForge",
-    "description": "Simple centered hello world",
+    "description": "Minimal example cart that prints centered text.",
     "genre": "Demo",
     "tags": ["example"],
     "entry": "main.lua",

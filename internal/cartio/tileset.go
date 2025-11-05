@@ -1,6 +1,7 @@
 package cartio
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -16,11 +17,75 @@ type TileData struct {
 	Animations []AnimationSequence `json:"animations,omitempty"` // Animation sequences (if type is animation)
 	UseCollision bool             `json:"useCollision"` // Enable collision detection
 	MountPoints  []MountPoint     `json:"mountPoints"`  // Array of mount points
-	IsISO        bool             `json:"isISO"`         // If true, convert to isometric when loaded
 }
 
 // TilesetMap maps tile names to their data
 type TilesetMap map[string]TileData
+
+// TilesetData represents a complete tileset with metadata
+type TilesetData struct {
+	IsISO    bool       `json:"isISO"`    // If true, tileset is isometric (renders using isometric transformation)
+	Tiles    TilesetMap `json:"tiles"`     // Map of tile names to tile data (or root-level tiles if isISO not present)
+}
+
+// tilesetJSON is used for JSON unmarshaling (handles both old format and new format)
+type tilesetJSON struct {
+	IsISO bool       `json:"isISO"`
+	Tiles TilesetMap `json:"tiles"`
+	// Support old format where tiles are at root level
+	TilesetMap
+}
+
+// UnmarshalJSON handles both old format (tiles at root) and new format (tiles in "tiles" field)
+func (ts *TilesetData) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Check if "isISO" field exists
+	if isISOData, hasIsISO := raw["isISO"]; hasIsISO {
+		var isISO bool
+		if err := json.Unmarshal(isISOData, &isISO); err != nil {
+			return err
+		}
+		ts.IsISO = isISO
+
+		// Check if "tiles" field exists
+		if tilesData, hasTiles := raw["tiles"]; hasTiles {
+			if err := json.Unmarshal(tilesData, &ts.Tiles); err != nil {
+				return err
+			}
+		} else {
+			// New format with isISO but tiles at root (shouldn't happen, but handle it)
+			ts.Tiles = make(TilesetMap)
+			for key, value := range raw {
+				if key != "isISO" {
+					var tile TileData
+					if err := json.Unmarshal(value, &tile); err == nil {
+						ts.Tiles[key] = tile
+					}
+				}
+			}
+		}
+	} else {
+		// Old format: tiles at root level, no isISO flag
+		ts.IsISO = false
+		if err := json.Unmarshal(data, &ts.Tiles); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// MarshalJSON writes the tileset in the new format
+func (ts TilesetData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"isISO": ts.IsISO,
+		"tiles": ts.Tiles,
+	})
+}
 
 // NormalizeTileData ensures tile data is in a consistent state
 func NormalizeTileData(tile *TileData) {
@@ -45,10 +110,23 @@ func NormalizeTileData(tile *TileData) {
 }
 
 // ValidateTileData validates a complete tile data structure
-func ValidateTileData(tile *TileData, tileName string) error {
-	// Validate dimensions (same as sprites, but tiles are always gameplay sprites)
-	if err := ValidateSpriteSize(tile.Width, tile.Height, false); err != nil {
-		return fmt.Errorf("tile '%s': %w", tileName, err)
+// isIsometric: if true, allows larger tiles (up to 128x128) for isometric 2.5D tiles
+func ValidateTileData(tile *TileData, tileName string, isIsometric bool) error {
+	// Validate dimensions
+	// Isometric tiles need larger dimensions (64x48, 128x96, etc.) for 2.5D effect
+	if isIsometric {
+		// Isometric tiles: allow up to 128x128 (for 2.5D tiles with side faces)
+		if tile.Width < 2 || tile.Height < 2 {
+			return fmt.Errorf("tile '%s': dimensions must be at least 2x2, got %dx%d", tileName, tile.Width, tile.Height)
+		}
+		if tile.Width > 128 || tile.Height > 128 {
+			return fmt.Errorf("tile '%s': isometric tile dimensions cannot exceed 128x128, got %dx%d", tileName, tile.Width, tile.Height)
+		}
+	} else {
+		// Normal tiles: use standard sprite size validation (2x2 to 32x32)
+		if err := ValidateSpriteSize(tile.Width, tile.Height, false); err != nil {
+			return fmt.Errorf("tile '%s': %w", tileName, err)
+		}
 	}
 
 	// Default type to "static" if not specified

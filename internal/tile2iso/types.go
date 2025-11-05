@@ -16,6 +16,7 @@ type TileOptions struct {
 	LightingMode LightingMode // Which lighting mode to apply
 	TileWidth    int          // Width of isometric tile (default: 64)
 	TileHeight   int          // Height of isometric tile (default: 32)
+	ShowOutline  bool         // If true, draw outlines around the tile faces (top diamond and side parallelograms)
 }
 
 // IsometricConverter converts 2D sprites to isometric tiles
@@ -33,12 +34,14 @@ func NewIsometricConverter(defaultWidth, defaultHeight int) *IsometricConverter 
 }
 
 // DefaultTileOptions returns default options for tile generation
+// For 32×24 output tiles (32 wide, 16 top + 8 sides)
 func DefaultTileOptions() TileOptions {
 	return TileOptions{
-		Height:       16,
+		Height:       8,  // Side face height
 		LightingMode: LightingGradient,
-		TileWidth:    64,
-		TileHeight:   32,
+		TileWidth:    32, // Final tile width
+		TileHeight:   16, // Top diamond height
+		ShowOutline:  false,
 	}
 }
 
