@@ -313,6 +313,48 @@ func (e *Engine) LoadCartFolder(cartPath string) error {
 		}
 	}
 
+	// Load Tilesets (scan for *_tiles.json files)
+	e.tilesetsMap = make(map[string]cartio.TilesetMap)
+	if entries, err := os.ReadDir(assetsPathForRPI); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			// Check for *_tiles.json pattern
+			if len(name) > 11 && name[len(name)-11:] == "_tiles.json" {
+				tilesetName := name[:len(name)-11] // Remove _tiles.json extension
+				tilesetPath := filepath.Join(assetsPathForRPI, name)
+				if err := e.loadTileset(tilesetName, tilesetPath); err != nil {
+					if e.devMode != nil {
+						e.devMode.AddDebugLog(fmt.Sprintf("Failed to load tileset '%s': %v", tilesetName, err))
+					}
+				}
+			}
+		}
+	}
+
+	// Load Tilemaps (scan for *_map.json files)
+	e.tilemapsMap = make(map[string]*cartio.TileMapData)
+	if entries, err := os.ReadDir(assetsPathForRPI); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			// Check for *_map.json pattern
+			if len(name) > 9 && name[len(name)-9:] == "_map.json" {
+				tilemapName := name[:len(name)-9] // Remove _map.json extension
+				tilemapPath := filepath.Join(assetsPathForRPI, name)
+				if err := e.loadTilemap(tilemapName, tilemapPath); err != nil {
+					if e.devMode != nil {
+						e.devMode.AddDebugLog(fmt.Sprintf("Failed to load tilemap '%s': %v", tilemapName, err))
+					}
+				}
+			}
+		}
+	}
+
 	// Register Lua bindings first (creates rf table)
 	e.registerLuaBindings()
 

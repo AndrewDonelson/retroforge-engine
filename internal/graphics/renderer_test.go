@@ -31,6 +31,7 @@ func TestClear(t *testing.T) {
 	r := rendersoft.New(10, 10)
 	c := color.RGBA{R: 128, G: 64, B: 32, A: 255}
 	r.Clear(c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	for i := 0; i < len(pix); i += 4 {
@@ -44,6 +45,7 @@ func TestPrint(t *testing.T) {
 	r := rendersoft.New(100, 50)
 	c := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	r.Print("TEST", 10, 10, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Verify some pixels were set (text rendering)
 	pix := r.Pixels()
@@ -62,6 +64,7 @@ func TestPrintCentered(t *testing.T) {
 	r := rendersoft.New(100, 50)
 	c := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	r.PrintCentered("HI", 25, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Verify text was rendered
 	pix := r.Pixels()

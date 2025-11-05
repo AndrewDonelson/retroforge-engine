@@ -33,10 +33,12 @@ type Engine struct {
 	Physics    *physics.World
 	Network    *network.NetworkManager     // Multiplayer networking
 	GSM        *gamestate.GameStateMachine // Game state machine
-	sfxMap     cartio.SFXMap
-	musicMap   cartio.MusicMap
-	spritesMap cartio.SpriteMap
-	devMode    *DevMode // Development mode (only when loading from folder)
+	sfxMap      cartio.SFXMap
+	musicMap    cartio.MusicMap
+	spritesMap  cartio.SpriteMap
+	tilesetsMap map[string]cartio.TilesetMap // Map of tileset name -> tileset data
+	tilemapsMap map[string]*cartio.TileMapData // Map of tilemap name -> tilemap data
+	devMode     *DevMode // Development mode (only when loading from folder)
 }
 
 func New(targetFPS int) *Engine {
@@ -53,15 +55,17 @@ func New(targetFPS int) *Engine {
 	gsm := gamestate.NewGameStateMachine(false, "RetroForge", "v1.0 Alpha", "RetroForge Team", nil, nil)
 
 	e := &Engine{
-		Bus:     bus,
-		Sched:   sched,
-		Run:     run,
-		VM:      vm,
-		Ren:     ren,
-		Pal:     pal.NewManager(),
-		Physics: phys,
-		Network: network.NewNetworkManager(),
-		GSM:     gsm,
+		Bus:        bus,
+		Sched:      sched,
+		Run:        run,
+		VM:         vm,
+		Ren:        ren,
+		Pal:        pal.NewManager(),
+		Physics:    phys,
+		Network:    network.NewNetworkManager(),
+		GSM:        gsm,
+		tilesetsMap: make(map[string]cartio.TilesetMap),
+		tilemapsMap: make(map[string]*cartio.TileMapData),
 	}
 	// On each tick, call Lua update with dt seconds.
 	bus.Subscribe("tick", func(v any) {
@@ -232,23 +236,23 @@ func (e *Engine) registerLuaBindings() {
 	if e.devMode != nil && e.devMode.IsEnabled() {
 		// Create adapter that implements DevModeHandler interface
 		devAdapter := &devModeAdapter{devMode: e.devMode}
-		luabind.RegisterWithDev(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
+		luabind.RegisterWithDevMode(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
 			col := e.Pal.Color(i)
 			c[0] = col.R
 			c[1] = col.G
 			c[2] = col.B
 			c[3] = col.A
 			return
-		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics, devAdapter, e.Network)
+		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.tilemapsMap, e.Physics, luabind.NewState(), devAdapter, e.Network)
 	} else {
-		luabind.Register(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
+		luabind.RegisterWithState(e.VM.L, e.Ren, func(i int) (c [4]uint8) {
 			col := e.Pal.Color(i)
 			c[0] = col.R
 			c[1] = col.G
 			c[2] = col.B
 			c[3] = col.A
 			return
-		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.Physics, e.Network)
+		}, e.Pal.Set, e.sfxMap, e.musicMap, e.spritesMap, e.tilemapsMap, e.Physics, luabind.NewState(), e.Network)
 	}
 
 	// Register state machine (needed for game.* API)

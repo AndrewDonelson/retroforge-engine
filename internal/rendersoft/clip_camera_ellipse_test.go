@@ -76,6 +76,7 @@ func TestCameraAffectsDrawing(t *testing.T) {
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
 	r.SetCamera(10, 0)
 	r.PSet(50, 50, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// With camera offset, setting pixel at (50, 50) should actually draw at (60, 50) internally
 	// but the API applies camera offset, so (50, 50) - (10, 0) = (40, 0) internal coordinate
@@ -99,6 +100,7 @@ func TestEllipse(t *testing.T) {
 
 	// Test basic ellipse
 	r.Ellipse(50, 50, 20, 15, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check that some pixels were drawn
 	pix := r.Pixels()
@@ -154,6 +156,7 @@ func TestEllipseFill(t *testing.T) {
 
 	// Test basic filled ellipse
 	r.EllipseFill(50, 50, 20, 15, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check that center is filled
 	pix := r.Pixels()
@@ -219,6 +222,7 @@ func TestClipAffectsDrawing(t *testing.T) {
 	// Draw outside clip region
 	r.PSet(5, 5, c)   // Should be clipped
 	r.PSet(15, 15, c) // Should be visible
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check that pixel in clip region was drawn
 	pix := r.Pixels()
@@ -230,7 +234,9 @@ func TestClipAffectsDrawing(t *testing.T) {
 	// Disable clip
 	r.SetClip(0, 0, 0, 0)
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
+	r.SwapBuffers() // Swap after clear
 	r.PSet(5, 5, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 	pix = r.Pixels()
 	outsideIdx := (5*100 + 5) * 4
 	if pix[outsideIdx+0] != 255 {

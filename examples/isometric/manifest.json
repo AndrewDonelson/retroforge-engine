@@ -1,0 +1,28 @@
+{
+  "enabled": false,
+  "minPlayers": 1,
+  "maxPlayers": 1,
+  "supportsSolo": true,
+  "hasMultiplayer": false,
+  "fullManifest": {
+    "title": "Isometric Tilemap Demo",
+    "author": "RetroForge",
+    "description": "Demonstrates isometric tilemaps with animated character walking",
+    "genre": "Demo",
+    "tags": ["example", "demo", "isometric", "tilemap", "tileset"],
+    "entry": "main.lua",
+    "palette": "Pastel 50",
+    "scale": 1
+  },
+  "manifestKeys": [
+    "title",
+    "author",
+    "description",
+    "genre",
+    "tags",
+    "entry",
+    "palette",
+    "scale"
+  ]
+}
+

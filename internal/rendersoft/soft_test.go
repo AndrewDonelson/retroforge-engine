@@ -22,6 +22,7 @@ func TestClear(t *testing.T) {
 	r := New(10, 10)
 	c := color.RGBA{R: 255, G: 128, B: 64, A: 255}
 	r.Clear(c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	for i := 0; i < len(pix); i += 4 {
@@ -35,6 +36,7 @@ func TestPSet(t *testing.T) {
 	r := New(10, 10)
 	c := color.RGBA{R: 255, G: 0, B: 0, A: 255}
 	r.PSet(5, 5, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	idx := (5*10 + 5) * 4
@@ -53,6 +55,7 @@ func TestLine(t *testing.T) {
 	r := New(10, 10)
 	c := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	r.Line(0, 0, 9, 9, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Line should set pixels along diagonal
 	pix := r.Pixels()
@@ -68,6 +71,7 @@ func TestRect(t *testing.T) {
 	r := New(10, 10)
 	c := color.RGBA{R: 255, G: 0, B: 0, A: 255}
 	r.Rect(2, 2, 7, 7, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check corners should be set
 	pix := r.Pixels()
@@ -87,6 +91,7 @@ func TestRectFill(t *testing.T) {
 	r := New(10, 10)
 	c := color.RGBA{R: 128, G: 128, B: 128, A: 255}
 	r.RectFill(2, 2, 7, 7, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	// Check that all pixels in rect are filled
@@ -102,6 +107,7 @@ func TestRectFill(t *testing.T) {
 	// Test reversed coordinates
 	r2 := New(10, 10)
 	r2.RectFill(7, 7, 2, 2, c)
+	r2.SwapBuffers() // Swap after drawing, before reading
 	// Should still work (function swaps if needed)
 	pix2 := r2.Pixels()
 	for y := 2; y <= 7; y++ {
@@ -118,6 +124,7 @@ func TestCirc(t *testing.T) {
 	r := New(20, 20)
 	c := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	r.Circ(10, 10, 5, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check some points should be set
 	pix := r.Pixels()
@@ -133,6 +140,7 @@ func TestCircFill(t *testing.T) {
 	r := New(20, 20)
 	c := color.RGBA{R: 255, G: 0, B: 0, A: 255}
 	r.CircFill(10, 10, 5, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	centerIdx := (10*20 + 10) * 4
@@ -155,6 +163,7 @@ func TestPrint(t *testing.T) {
 	r := New(100, 50)
 	c := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	r.Print("HELLO", 10, 10, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Text should render some pixels
 	pix := r.Pixels()
@@ -173,6 +182,7 @@ func TestPrintCentered(t *testing.T) {
 	r := New(100, 50)
 	c := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	r.PrintCentered("HI", 25, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Should render text
 	pix := r.Pixels()
@@ -297,6 +307,7 @@ func TestRectFillEdgeCases(t *testing.T) {
 
 	// Test partially out of bounds (should clip)
 	r.RectFill(-5, -5, 5, 5, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 	// Verify pixels in bounds were filled
 	pix := r.Pixels()
 	filled := 0
@@ -410,6 +421,7 @@ func TestClearEdgeCases(t *testing.T) {
 	// Test with zero alpha
 	c := color.RGBA{R: 255, G: 0, B: 0, A: 0}
 	r.Clear(c)
+	r.SwapBuffers() // Swap after drawing, before reading
 	pix := r.Pixels()
 	// Implementation sets alpha to 0xFF regardless of input
 	if pix[3] != 0xFF {
@@ -423,6 +435,7 @@ func TestClearEdgeCases(t *testing.T) {
 	// Test with minimum values
 	c = color.RGBA{R: 0, G: 0, B: 0, A: 0}
 	r.Clear(c)
+	r.SwapBuffers() // Swap after drawing
 }
 
 func TestPixelsImmutable(t *testing.T) {
@@ -452,6 +465,7 @@ func TestColorValues(t *testing.T) {
 
 	for _, c := range colors {
 		r.Clear(c)
+		r.SwapBuffers() // Swap after drawing, before reading
 		pix := r.Pixels()
 		if pix[0] != c.R || pix[1] != c.G || pix[2] != c.B {
 			t.Fatalf("Clear with color %v failed", c)

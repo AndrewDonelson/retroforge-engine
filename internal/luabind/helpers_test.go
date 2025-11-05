@@ -114,7 +114,7 @@ func TestRnd(t *testing.T) {
 
 	r := rendersoft.New(480, 270)
 	state := NewState()
-	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
+	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil, state, nil)
 
 	// Test rnd() with no arguments (should return 0.0 to 1.0, exclusive of 1.0)
 	values := make([]float64, 100)
@@ -444,7 +444,7 @@ func TestHelperFunctionsCombined(t *testing.T) {
 
 	r := rendersoft.New(480, 270)
 	state := NewState()
-	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, state, nil)
+	RegisterWithState(L, r, func(i int) (rgba [4]uint8) { return [4]uint8{0, 0, 0, 255} }, nil, make(cartio.SFXMap), make(cartio.MusicMap), make(cartio.SpriteMap), nil, nil, state, nil)
 
 	// Test practical combinations
 	err := L.DoString(`

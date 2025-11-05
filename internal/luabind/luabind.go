@@ -62,22 +62,24 @@ func (au *AnimationUpdater) UpdateAnimations(deltaTime time.Duration) {
 // Register attaches rf.* drawing functions to the Lua state.
 func Register(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, netMgr *network.NetworkManager) {
 	state := NewState()
-	RegisterWithState(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, netMgr)
+	RegisterWithState(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, nil, physWorld, state, netMgr)
 }
 
 // RegisterWithDev attaches rf.* drawing functions with dev mode support
+// Note: This function doesn't receive tilemapsMap, so it passes nil
+// For full tilemap support, use RegisterWithDevMode directly
 func RegisterWithDev(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, devMode DevModeHandler, netMgr *network.NetworkManager) {
 	state := NewState()
-	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, devMode, netMgr)
+	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, nil, physWorld, state, devMode, netMgr)
 }
 
 // RegisterWithState attaches rf.* drawing functions with state management
-func RegisterWithState(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, state *State, netMgr *network.NetworkManager) {
-	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, physWorld, state, nil, netMgr)
+func RegisterWithState(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, tilemapsMap map[string]*cartio.TileMapData, physWorld *physics.World, state *State, netMgr *network.NetworkManager) {
+	RegisterWithDevMode(L, r, colorByIndex, setPalette, sfxMap, musicMap, spritesMap, tilemapsMap, physWorld, state, nil, netMgr)
 }
 
 // RegisterWithDevMode attaches rf.* drawing functions with dev mode support
-func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, physWorld *physics.World, state *State, devMode DevModeHandler, netMgr *network.NetworkManager) {
+func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorByIndex, setPalette func(string), sfxMap cartio.SFXMap, musicMap cartio.MusicMap, spritesMap cartio.SpriteMap, tilemapsMap map[string]*cartio.TileMapData, physWorld *physics.World, state *State, devMode DevModeHandler, netMgr *network.NetworkManager) {
 	rf := L.NewTable()
 	L.SetGlobal("rf", rf)
 
@@ -2431,5 +2433,105 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 			L.Push(lua.LNumber(int(str[0])))
 		}
 		return 1
+	}))
+
+	// Tilemap rendering: rf.drawTilemap(mapName, offsetX, offsetY)
+	// Draws a tilemap at the specified offset
+	tilemapsMapPtr := &tilemapsMap
+	L.SetField(rf, "drawTilemap", L.NewFunction(func(L *lua.LState) int {
+		mapName := L.CheckString(1)
+		offsetX := L.OptInt(2, 0)
+		offsetY := L.OptInt(3, 0)
+
+		// Get tilemap
+		tilemapData, exists := (*tilemapsMapPtr)[mapName]
+		if !exists {
+			return 0 // Tilemap not found, do nothing
+		}
+
+		// Check if this is an isometric tileset (by checking first non-empty tile)
+		isIsometric := false
+		for _, row := range tilemapData.Tiles {
+			for _, tileName := range row {
+				if tileName != "" {
+					if tile, exists := tilemapData.Tileset[tileName]; exists {
+						// Isometric tiles have height = width/2 (characteristic after conversion)
+						if tile.Height > 0 && tile.Width > 0 {
+							expectedHeight := tile.Width / 2
+							if tile.Height == expectedHeight || tile.Height == expectedHeight+1 || tile.Height == expectedHeight-1 {
+								isIsometric = true
+							}
+						}
+					}
+					break
+				}
+			}
+			if isIsometric {
+				break
+			}
+		}
+
+		// Draw each tile in the map
+		for mapY, row := range tilemapData.Tiles {
+			for mapX, tileName := range row {
+				if tileName == "" {
+					continue // Empty tile
+				}
+
+				// Get tile from tileset
+				tile, exists := tilemapData.Tileset[tileName]
+				if !exists {
+					continue // Tile not found in tileset
+				}
+
+				// Calculate screen position
+				var screenX, screenY int
+				if isIsometric {
+					// Isometric positioning: staggered diamond pattern
+					// X: offset by half tile width for each row/column
+					// Y: offset by half tile height for each row/column
+					screenX = offsetX + (mapX-mapY)*(tile.Width/2)
+					screenY = offsetY + (mapX+mapY)*(tile.Height/2)
+				} else {
+					// Normal orthogonal positioning: simple grid
+					screenX = offsetX + mapX*tile.Width
+					screenY = offsetY + mapY*tile.Height
+				}
+
+				// Draw tile using rf.spr (treat tiles as sprites)
+				// For now, we'll draw the tile directly pixel by pixel
+				// Get tile pixels (handle static/frames/animation)
+				var pixels [][]int
+				switch tile.Type {
+				case cartio.SpriteTypeStatic:
+					pixels = tile.Pixels
+				case cartio.SpriteTypeFrames, cartio.SpriteTypeAnimation:
+					// For frames/animation, use first frame
+					if len(tile.Frames) > 0 {
+						pixels = tile.Frames[0].Pixels
+					} else {
+						continue
+					}
+				default:
+					continue
+				}
+
+				// Draw tile pixels
+				for ty, pixelRow := range pixels {
+					for tx, colorIdx := range pixelRow {
+						if colorIdx >= 0 && colorIdx < 50 {
+							px := screenX + tx
+							py := screenY + ty
+							if px >= 0 && px < 480 && py >= 0 && py < 270 {
+								c := colorByIndexRemapped(colorIdx)
+								r.PSet(px, py, color.RGBA{c[0], c[1], c[2], c[3]})
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return 0
 	}))
 }

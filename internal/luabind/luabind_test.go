@@ -71,6 +71,9 @@ func TestClearFunction(t *testing.T) {
 		t.Fatalf("rf.clear_i should not error: %v", err)
 	}
 
+	// Note: clear_i should trigger SwapBuffers internally, but we'll call it explicitly for tests
+	r.SwapBuffers() // Swap after drawing, before reading
+
 	// Verify pixels were cleared with palette color
 	pix := r.Pixels()
 	if pix[0] != 255 || pix[1] != 128 || pix[2] != 64 {
@@ -102,6 +105,9 @@ func TestClearIFunction(t *testing.T) {
 	if !called {
 		t.Fatalf("colorByIndex should be called")
 	}
+
+	// Note: clear_i should trigger SwapBuffers internally, but we'll call it explicitly for tests
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Verify pixels were cleared with white
 	pix := r.Pixels()

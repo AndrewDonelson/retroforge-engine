@@ -11,6 +11,7 @@ func TestTriangle(t *testing.T) {
 
 	// Test outline triangle
 	r.Triangle(50, 50, 20, false, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check that some pixels were drawn
 	pix := r.Pixels()
@@ -27,9 +28,12 @@ func TestTriangle(t *testing.T) {
 
 	// Test filled triangle
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
+	r.SwapBuffers() // Swap after clear
 	r.Triangle(50, 50, 20, true, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check that center is filled
+	pix = r.Pixels()
 	centerIdx := (50*100 + 50) * 4
 	if pix[centerIdx+0] == 255 {
 		// Center should be filled
@@ -73,6 +77,7 @@ func TestDiamond(t *testing.T) {
 
 	// Test outline diamond
 	r.Diamond(50, 50, 20, false, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	drawn := false
@@ -88,9 +93,12 @@ func TestDiamond(t *testing.T) {
 
 	// Test filled diamond
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
+	r.SwapBuffers() // Swap after clear
 	r.Diamond(50, 50, 20, true, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Check center is filled
+	pix = r.Pixels()
 	centerIdx := (50*100 + 50) * 4
 	if pix[centerIdx+1] == 255 {
 		// Center should be filled
@@ -123,6 +131,7 @@ func TestSquare(t *testing.T) {
 
 	// Test outline square
 	r.Square(50, 50, 15, false, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	drawn := false
@@ -138,9 +147,12 @@ func TestSquare(t *testing.T) {
 
 	// Test filled square
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
+	r.SwapBuffers() // Swap after clear
 	r.Square(50, 50, 15, true, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	// Center should be filled
+	pix = r.Pixels()
 	centerIdx := (50*100 + 50) * 4
 	if pix[centerIdx+2] != 255 {
 		t.Errorf("Square fill should fill center")
@@ -174,6 +186,7 @@ func TestPentagon(t *testing.T) {
 
 	// Test outline pentagon
 	r.Pentagon(50, 50, 20, false, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	drawn := false
@@ -189,8 +202,11 @@ func TestPentagon(t *testing.T) {
 
 	// Test filled pentagon
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
+	r.SwapBuffers() // Swap after clear
 	r.Pentagon(50, 50, 20, true, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
+	pix = r.Pixels()
 	centerIdx := (50*100 + 50) * 4
 	if pix[centerIdx+0] == 255 {
 		// Center should be filled
@@ -223,6 +239,7 @@ func TestHexagon(t *testing.T) {
 
 	// Test outline hexagon
 	r.Hexagon(50, 50, 20, false, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	drawn := false
@@ -238,8 +255,11 @@ func TestHexagon(t *testing.T) {
 
 	// Test filled hexagon
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
+	r.SwapBuffers() // Swap after clear
 	r.Hexagon(50, 50, 20, true, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
+	pix = r.Pixels()
 	centerIdx := (50*100 + 50) * 4
 	if pix[centerIdx+0] == 255 {
 		// Center should be filled
@@ -272,6 +292,7 @@ func TestStar(t *testing.T) {
 
 	// Test outline star
 	r.Star(50, 50, 20, false, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
 	pix := r.Pixels()
 	drawn := false
@@ -287,8 +308,11 @@ func TestStar(t *testing.T) {
 
 	// Test filled star
 	r.Clear(color.RGBA{R: 0, G: 0, B: 0, A: 255})
+	r.SwapBuffers() // Swap after clear
 	r.Star(50, 50, 20, true, c)
+	r.SwapBuffers() // Swap after drawing, before reading
 
+	pix = r.Pixels()
 	centerIdx := (50*100 + 50) * 4
 	if pix[centerIdx+0] == 255 {
 		// Center should be filled
