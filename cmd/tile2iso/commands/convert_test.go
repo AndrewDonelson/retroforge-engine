@@ -212,8 +212,8 @@ func generateTestPixels(width, height int) [][]int {
 }
 
 func generateTestPalette() []string {
-	palette := make([]string, 50)
-	for i := 0; i < 50; i++ {
+	palette := make([]string, 48) // Game palette is 48 colors (indices 16-63)
+	for i := 0; i < 48; i++ {
 		r := uint8(i * 5 % 256)
 		g := uint8((i * 7) % 256)
 		b := uint8((i * 11) % 256)

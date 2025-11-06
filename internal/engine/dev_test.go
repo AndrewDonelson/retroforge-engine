@@ -59,7 +59,10 @@ func TestDevModeDebugLogs(t *testing.T) {
 	dm := NewDevMode()
 
 	// Test adding debug logs
+	// Note: AddDebugLog has throttling, so we need to wait between messages
+	// or use different messages to avoid throttling
 	dm.AddDebugLog("test message 1")
+	time.Sleep(150 * time.Millisecond) // Wait longer than minLogInterval (100ms)
 	dm.AddDebugLog("test message 2")
 
 	logs := dm.GetDebugLogs()

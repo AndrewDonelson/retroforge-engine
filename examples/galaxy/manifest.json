@@ -11,7 +11,7 @@
     "genre": "Simulation",
     "tags": ["example", "simulation", "physics", "galaxy"],
     "entry": "main.lua",
-    "palette": "PICO-8",
+    "palette": "PICO-8+ 48",
     "scale": 1
   },
   "manifestKeys": [

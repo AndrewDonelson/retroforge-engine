@@ -330,7 +330,7 @@ func (ess *EngineSplashState) Draw() {
 
 	// Draw "Press any key" message at bottom
 	msg := "Press any key..."
-	msgCol := ess.gsm.palette.Color(1) // White (index 1)
+	msgCol := ess.gsm.palette.Color(7) // White (index 7, built-in)
 	ess.gsm.renderer.Print(msg, (ess.gsm.renderer.Width()-len(msg)*font.Advance)/2,
 		ess.gsm.renderer.Height()-20, color.RGBA{R: msgCol.R, G: msgCol.G, B: msgCol.B, A: msgCol.A})
 }
@@ -454,14 +454,14 @@ func (cs *CreditsState) Draw() {
 	cs.gsm.renderer.Clear(color.RGBA{R: col.R, G: col.G, B: col.B, A: col.A})
 
 	// Draw title at top
-	titleCol := cs.gsm.palette.Color(15) // White
+	titleCol := cs.gsm.palette.Color(7) // White (index 7, built-in)
 	title := "CREDITS"
 	cs.gsm.renderer.Print(title, (cs.gsm.renderer.Width()-len(title)*font.Advance)/2, 20,
 		color.RGBA{R: titleCol.R, G: titleCol.G, B: titleCol.B, A: titleCol.A})
 
 	// Draw engine credits (more compact)
 	engineName, engineVersion, engineDev := cs.gsm.GetEngineInfo()
-	engineCol := cs.gsm.palette.Color(11) // Light blue
+	engineCol := cs.gsm.palette.Color(12) // Cyan (index 12, built-in)
 	y := 50
 
 	engineLine := engineName + " " + engineVersion

@@ -14,17 +14,17 @@ func TestNewManager(t *testing.T) {
 		t.Fatalf("index 0 should be black, got %v", c)
 	}
 
-	c = m.Color(1)
+	c = m.Color(7)
 	if c.R != 255 || c.G != 255 || c.B != 255 {
-		t.Fatalf("index 1 should be white, got %v", c)
+		t.Fatalf("index 7 should be white (built-in), got %v", c)
 	}
 }
 
 func TestColor(t *testing.T) {
 	m := NewManager()
 
-	// Test valid indices
-	for i := 0; i < 50; i++ {
+	// Test valid indices (64 colors: 0-63)
+	for i := 0; i < 64; i++ {
 		c := m.Color(i)
 		if c.A != 255 {
 			t.Fatalf("color at index %d should have alpha 255, got %d", i, c.A)
@@ -55,9 +55,9 @@ func TestSet(t *testing.T) {
 		t.Fatalf("Set('default') should reset to black at index 0")
 	}
 
-	c = m.Color(1)
+	c = m.Color(7)
 	if c.R != 255 || c.G != 255 || c.B != 255 {
-		t.Fatalf("Set('default') should reset to white at index 1")
+		t.Fatalf("Set('default') should reset to white at index 7 (built-in)")
 	}
 
 	// Test setting different name (currently only supports default, but shouldn't crash)
@@ -68,26 +68,40 @@ func TestSet(t *testing.T) {
 	}
 }
 
-func TestDefault50(t *testing.T) {
-	// Verify Default50 has correct length
-	if len(Default50) != 50 {
-		t.Fatalf("Default50 should have 50 colors, got %d", len(Default50))
-	}
-
-	// Verify index 0 is black
-	if Default50[0].R != 0 || Default50[0].G != 0 || Default50[0].B != 0 {
-		t.Fatalf("Default50[0] should be black")
-	}
-
-	// Verify index 1 is white
-	if Default50[1].R != 255 || Default50[1].G != 255 || Default50[1].B != 255 {
-		t.Fatalf("Default50[1] should be white")
+func TestDefault48(t *testing.T) {
+	// Verify Default48 has correct length (48 colors for game palette)
+	if len(Default48) != 48 {
+		t.Fatalf("Default48 should have 48 colors, got %d", len(Default48))
 	}
 
 	// Verify all have alpha 255
-	for i := 0; i < 50; i++ {
-		if Default50[i].A != 255 {
-			t.Fatalf("Default50[%d] should have alpha 255, got %d", i, Default50[i].A)
+	for i := 0; i < 48; i++ {
+		if Default48[i].A != 255 {
+			t.Fatalf("Default48[%d] should have alpha 255, got %d", i, Default48[i].A)
+		}
+	}
+}
+
+func TestBuiltinColors(t *testing.T) {
+	// Verify BuiltinColors has correct length (16 colors)
+	if len(BuiltinColors) != 16 {
+		t.Fatalf("BuiltinColors should have 16 colors, got %d", len(BuiltinColors))
+	}
+
+	// Verify index 0 is black
+	if BuiltinColors[0].R != 0 || BuiltinColors[0].G != 0 || BuiltinColors[0].B != 0 {
+		t.Fatalf("BuiltinColors[0] should be black")
+	}
+
+	// Verify index 7 is white
+	if BuiltinColors[7].R != 255 || BuiltinColors[7].G != 255 || BuiltinColors[7].B != 255 {
+		t.Fatalf("BuiltinColors[7] should be white")
+	}
+
+	// Verify all have alpha 255
+	for i := 0; i < 16; i++ {
+		if BuiltinColors[i].A != 255 {
+			t.Fatalf("BuiltinColors[%d] should have alpha 255, got %d", i, BuiltinColors[i].A)
 		}
 	}
 }
@@ -101,19 +115,19 @@ func TestColorEdgeCases(t *testing.T) {
 		t.Fatalf("Color(0) should return black")
 	}
 
-	c = m.Color(49) // last valid index
+	c = m.Color(63) // last valid index (64 colors: 0-63)
 	if c.A != 255 {
-		t.Fatalf("Color(49) should have valid alpha")
+		t.Fatalf("Color(63) should have valid alpha")
 	}
 
 	// Test at boundary (should return default)
-	c = m.Color(50)
+	c = m.Color(64)
 	if c.R != 0 || c.G != 0 || c.B != 0 {
-		t.Fatalf("Color(50) should return default (black)")
+		t.Fatalf("Color(64) should return default (black)")
 	}
 
 	// Test very large values
-	testCases := []int{-1, 50, 100, 999, 2147483647, -2147483648}
+	testCases := []int{-1, 64, 100, 999, 2147483647, -2147483648}
 	for _, idx := range testCases {
 		c := m.Color(idx)
 		if c.R != 0 || c.G != 0 || c.B != 0 {
@@ -143,9 +157,9 @@ func TestSetEdgeCases(t *testing.T) {
 	m.Set("default")
 	m.Set("default")
 	m.Set("default")
-	c = m.Color(1)
+	c = m.Color(7) // White is now at index 7 (built-in)
 	if c.R != 255 || c.G != 255 || c.B != 255 {
-		t.Fatalf("Multiple Set calls should work")
+		t.Fatalf("Multiple Set calls should work, white should be at index 7")
 	}
 }
 
@@ -168,8 +182,8 @@ func TestManagerState(t *testing.T) {
 func TestColorAllIndices(t *testing.T) {
 	m := NewManager()
 
-	// Test all valid indices
-	for i := 0; i < 50; i++ {
+	// Test all valid indices (64 colors: 0-63)
+	for i := 0; i < 64; i++ {
 		c := m.Color(i)
 		if c.A != 255 {
 			t.Fatalf("Color(%d) should have alpha 255, got %d", i, c.A)

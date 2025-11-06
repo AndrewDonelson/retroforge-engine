@@ -6,9 +6,11 @@ import (
 	"image/color"
 )
 
-// Palette represents a 50-color RetroForge palette
+// Palette represents a 48-color RetroForge game palette
+// Note: Built-in colors (0-15) are always available in the engine
+// This structure represents only the game palette (48 colors, indices 16-63)
 type Palette struct {
-	Colors []string `json:"colors"` // Exactly 50 hex color strings
+	Colors []string `json:"colors"` // Exactly 48 hex color strings
 }
 
 // Sprite represents a RetroForge sprite (matches sprites.json format)
@@ -34,9 +36,9 @@ type Color struct {
 	R, G, B uint8
 }
 
-// Validate validates the palette structure
+// Validate validates the palette structure (48 colors for game palette)
 func (p *Palette) Validate() error {
-	if len(p.Colors) != 50 {
+	if len(p.Colors) != 48 {
 		return ErrInvalidPaletteSize
 	}
 	for i, hex := range p.Colors {
@@ -62,8 +64,8 @@ func (s *Sprite) Validate() error {
 			return fmt.Errorf("row %d has wrong width: expected %d, got %d", i, s.Width, len(row))
 		}
 		for j, idx := range row {
-			if idx < -1 || idx > 49 {
-				return fmt.Errorf("invalid palette index at [%d][%d]: %d", i, j, idx)
+			if idx < -1 || idx > 63 {
+				return fmt.Errorf("invalid palette index at [%d][%d]: %d (valid range: -1 to 63)", i, j, idx)
 			}
 		}
 	}

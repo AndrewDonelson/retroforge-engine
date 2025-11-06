@@ -16,8 +16,8 @@ func TestQuantize_SingleColor(t *testing.T) {
 		t.Fatalf("Quantize() error = %v", err)
 	}
 
-	if len(palette.Colors) != 50 {
-		t.Errorf("Quantize() palette length = %v, want 50", len(palette.Colors))
+	if len(palette.Colors) != 48 {
+		t.Errorf("Quantize() palette length = %v, want 48 (game palette)", len(palette.Colors))
 	}
 }
 
@@ -38,8 +38,8 @@ func TestQuantize_WithTransparency(t *testing.T) {
 		t.Fatalf("Quantize() error = %v", err)
 	}
 
-	if len(palette.Colors) != 50 {
-		t.Errorf("Quantize() palette length = %v, want 50", len(palette.Colors))
+	if len(palette.Colors) != 48 {
+		t.Errorf("Quantize() palette length = %v, want 48 (game palette)", len(palette.Colors))
 	}
 }
 
@@ -53,11 +53,11 @@ func TestQuantize_EnforcesBlackWhite(t *testing.T) {
 		t.Fatalf("Quantize() error = %v", err)
 	}
 
-	if palette.Colors[0] != "#000000" {
-		t.Errorf("Quantize() index 0 = %v, want #000000", palette.Colors[0])
-	}
-	if palette.Colors[1] != "#ffffff" {
-		t.Errorf("Quantize() index 1 = %v, want #ffffff", palette.Colors[1])
+	// Note: With new 64-color system, black/white are in built-in colors (0-15)
+	// Game palette (48 colors) doesn't enforce black/white at indices 0-1
+	// Just verify we got 48 colors
+	if len(palette.Colors) != 48 {
+		t.Errorf("Quantize() palette length = %v, want 48", len(palette.Colors))
 	}
 }
 
@@ -83,8 +83,8 @@ func TestQuantize_Dithering(t *testing.T) {
 				t.Fatalf("Quantize() error = %v", err)
 			}
 			
-			if len(palette.Colors) != 50 {
-				t.Errorf("Quantize() palette length = %v, want 50", len(palette.Colors))
+			if len(palette.Colors) != 48 {
+				t.Errorf("Quantize() palette length = %v, want 48", len(palette.Colors))
 			}
 		})
 	}

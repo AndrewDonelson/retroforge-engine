@@ -8,8 +8,8 @@ Convert a sprite from sprites.json to .rpi (Raw Palette Indexed) format.
   - height: uint16 (2 bytes, little-endian)
   - flags: uint16 (2 bytes) - reserved for future use
   - reserved: uint16 (2 bytes)
-- Data: Packed 6-bit palette indices (0-49 for colors, 255 = transparent)
-  - Each pixel uses 6 bits (supports 0-63, but we use 0-49 + 255 mapping)
+- Data: Packed 6-bit palette indices (0-63 for colors, 63 = transparent)
+  - Each pixel uses 6 bits (supports 0-63, full 64-color palette)
   - Pixels are packed sequentially, row by row
   - Transparent is encoded as 63 (6 bits max), then mapped to -1 on decode
 
@@ -46,8 +46,9 @@ def convert_sprite_to_rpi(sprites_file, sprite_name, output_file, compress=True)
     header = struct.pack('<HHHH', width, height, flags, 0)
     
     # Pack pixel data as 6-bit values
-    # Map: -1 (transparent) -> 63, 0-49 -> 0-49
+    # Map: -1 (transparent) -> 63, 0-63 (colors) -> 0-63
     # Pixels are stored row by row: pixels[height][width]
+    # Full 64-color palette: indices 0-15 (built-in), 16-63 (game palette)
     encoded_pixels = []
     
     for y in range(height):
@@ -62,10 +63,10 @@ def convert_sprite_to_rpi(sprites_file, sprite_name, output_file, compress=True)
                 encoded = 63
             else:
                 pixel = row[x]
-                # Map transparent (-1) to 63, colors (0-49) stay as-is
+                # Map transparent (-1) to 63, colors (0-63) stay as-is
                 if pixel == -1:
                     encoded = 63
-                elif 0 <= pixel <= 49:
+                elif 0 <= pixel <= 63:
                     encoded = pixel
                 else:
                     # Invalid palette index, default to transparent

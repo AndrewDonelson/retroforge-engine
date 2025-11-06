@@ -10,7 +10,7 @@
     "author": "RetroForge",
     "description": "Simple platformer demonstrating multiplayer sync",
     "entry": "main.lua",
-    "palette": "SNES 50",
+    "palette": "SNES 48",
     "tags": ["demo", "platformer", "multiplayer"],
     "cartVersion": "1.0.0",
     "engineVersion": "2.0.0"

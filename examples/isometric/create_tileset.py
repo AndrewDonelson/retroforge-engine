@@ -21,7 +21,7 @@ import subprocess
 import tempfile
 import shutil
 
-# RetroForge 50 palette indices for terrain tiles
+# RetroForge 48 palette indices for terrain tiles (game palette, indices 16-63 in full system)
 PALETTE_INDICES = {
     'earth': 7,       # Orange shadow (brownish)
     'grass': 15,      # Green base
@@ -63,8 +63,9 @@ def create_dithered_sprite(width, height, base_color_idx, dither_intensity=1):
     random.seed(base_color_idx * 1000)
     
     # Define nearby palette indices for dithering (within +/- 2 indices)
+    # Note: Game palette is 48 colors (indices 0-47), which map to 16-63 in full system
     darker_idx = max(0, base_color_idx - dither_intensity)
-    lighter_idx = min(49, base_color_idx + dither_intensity)
+    lighter_idx = min(47, base_color_idx + dither_intensity)  # Max index is 47 for game palette
     
     for y in range(height):
         row = []
@@ -97,7 +98,7 @@ def create_terrain_sprites(tile_name, color_idx):
             for x in range(16):
                 pattern = (x * 3 + y * 7) % 11
                 if pattern == 0:
-                    top_pixels[y][x] = min(49, color_idx + 1)  # Lighter green spots
+                    top_pixels[y][x] = min(47, color_idx + 1)  # Lighter green spots (max 47)
                 elif pattern == 1:
                     top_pixels[y][x] = max(0, color_idx - 1)  # Darker green spots
     elif tile_name == 'water':
@@ -106,7 +107,7 @@ def create_terrain_sprites(tile_name, color_idx):
             for x in range(16):
                 wave = int((x * 2 + y * 3) / 3) % 3
                 if wave == 0:
-                    top_pixels[y][x] = min(49, color_idx + 1)  # Lighter water
+                    top_pixels[y][x] = min(47, color_idx + 1)  # Lighter water (max 47)
                 elif wave == 2:
                     top_pixels[y][x] = max(0, color_idx - 1)  # Darker water
     elif tile_name == 'rock':
@@ -117,14 +118,14 @@ def create_terrain_sprites(tile_name, color_idx):
                 if pattern < 2:
                     top_pixels[y][x] = max(0, color_idx - 1)  # Dark cracks
                 elif pattern == 3:
-                    top_pixels[y][x] = min(49, color_idx + 1)  # Light highlights
+                    top_pixels[y][x] = min(47, color_idx + 1)  # Light highlights (max 47)
     elif tile_name == 'desert':
         # Add sand texture with wind patterns
         for y in range(16):
             for x in range(16):
                 pattern = (x + y * 2) % 5
                 if pattern == 0:
-                    top_pixels[y][x] = min(49, color_idx + 1)  # Lighter sand
+                    top_pixels[y][x] = min(47, color_idx + 1)  # Lighter sand (max 47)
                 elif pattern == 4:
                     top_pixels[y][x] = max(0, color_idx - 1)  # Darker sand
     elif tile_name == 'snow':
@@ -132,14 +133,14 @@ def create_terrain_sprites(tile_name, color_idx):
         for y in range(16):
             for x in range(16):
                 if (x * 7 + y * 11) % 13 == 0:
-                    top_pixels[y][x] = min(49, color_idx + 1)  # Slight highlights
+                    top_pixels[y][x] = min(47, color_idx + 1)  # Slight highlights (max 47)
     elif tile_name == 'lava':
         # Add lava texture with glowing spots
         for y in range(16):
             for x in range(16):
                 pattern = (x * 3 + y * 5) % 8
                 if pattern < 2:
-                    top_pixels[y][x] = min(49, color_idx + 1)  # Bright spots
+                    top_pixels[y][x] = min(47, color_idx + 1)  # Bright spots (max 47)
                 elif pattern == 3:
                     top_pixels[y][x] = max(0, color_idx - 1)  # Darker areas
     elif tile_name == 'earth':
@@ -148,7 +149,7 @@ def create_terrain_sprites(tile_name, color_idx):
             for x in range(16):
                 pattern = (x * 2 + y * 3) % 6
                 if pattern == 0:
-                    top_pixels[y][x] = min(49, color_idx + 1)  # Lighter dirt
+                    top_pixels[y][x] = min(47, color_idx + 1)  # Lighter dirt (max 47)
                 elif pattern == 5:
                     top_pixels[y][x] = max(0, color_idx - 1)  # Darker clumps
     
@@ -228,7 +229,7 @@ def find_tile2iso_binary():
     return None
 
 def create_palette_json(palette_path):
-    """Create a palette.json file for RetroForge 50."""
+    """Create a palette.json file for RetroForge 48 game palette."""
     # Load the actual palette.json from the engine root
     engine_dir = os.path.join(os.path.dirname(__file__), '..', '..')
     actual_palette_path = os.path.join(engine_dir, 'palette.json')
@@ -238,19 +239,19 @@ def create_palette_json(palette_path):
         shutil.copy(actual_palette_path, palette_path)
         return
     
-    # Fallback: RetroForge 50 palette colors (exactly 50 colors)
+    # Fallback: RetroForge 48 game palette colors (exactly 48 colors, indices 16-63 in full system)
     palette = {
         "colors": [
-            "#000000", "#ffffff", "#ff8989", "#ff4d4d", "#c31111",  # 0-4
-            "#ffcd89", "#ff914d", "#c35511", "#ffff89", "#ffd84d",  # 5-9
-            "#c39c11", "#f2ff89", "#b6ff4d", "#7ac311", "#89ffc3",  # 10-14
-            "#4dd487", "#11984b", "#72ffff", "#36d8c7", "#009c8b",  # 15-19
-            "#89ffff", "#4dd5ff", "#1199c3", "#a2fbff", "#66bfff",  # 20-24
-            "#2a83c3", "#abc4ff", "#6f88ff", "#334cc3", "#c6b1ff",  # 25-29
-            "#8a75ff", "#4e39c3", "#f0b4ff", "#b478ff", "#783cc3",  # 30-34
-            "#ffabed", "#ff6fb1", "#c33375", "#ffbbdc", "#ff7fa0",  # 35-39
-            "#c34364", "#e4b596", "#a8795a", "#6c3d1e", "#dced96",  # 40-44
-            "#a0b15a", "#64751e", "#74f9ff", "#38bdf8", "#0081bc"   # 45-49
+            "#ff8989", "#ff4d4d", "#c31111",  # 0-2 (game palette indices, map to 16-18 in full)
+            "#ffcd89", "#ff914d", "#c35511", "#ffff89", "#ffd84d",  # 3-7
+            "#c39c11", "#f2ff89", "#b6ff4d", "#7ac311", "#89ffc3",  # 8-12
+            "#4dd487", "#11984b", "#72ffff", "#36d8c7", "#009c8b",  # 13-17
+            "#89ffff", "#4dd5ff", "#1199c3", "#a2fbff", "#66bfff",  # 18-22
+            "#2a83c3", "#abc4ff", "#6f88ff", "#334cc3", "#c6b1ff",  # 23-27
+            "#8a75ff", "#4e39c3", "#f0b4ff", "#b478ff", "#783cc3",  # 28-32
+            "#ffabed", "#ff6fb1", "#c33375", "#ffbbdc", "#ff7fa0",  # 33-37
+            "#c34364", "#e4b596", "#a8795a", "#6c3d1e", "#dced96",  # 38-42
+            "#a0b15a", "#64751e", "#74f9ff", "#38bdf8", "#0081bc"   # 43-47
         ]
     }
     
@@ -380,7 +381,7 @@ def main():
         
         print(f"\n✓ Created isometric tileset: {output_path}")
         print(f"  Tiles: {', '.join(tiles)}")
-        print(f"  Palette: RetroForge 50")
+        print(f"  Palette: RetroForge 48 (game palette, indices 16-63 in full system)")
         print(f"  Isometric: True (tileset-level flag)")
         print(f"  All tiles are 2.5D isometric tiles with side faces")
     

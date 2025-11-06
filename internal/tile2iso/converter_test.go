@@ -340,3 +340,57 @@ func generateTestPixels(width, height int) [][]int {
 	}
 	return pixels
 }
+
+func TestCreateIsometricTile_CustomDimensions(t *testing.T) {
+	palette := generateTestPalette()
+	converter := NewIsometricConverter(64, 32)
+
+	spriteMap := cartio.SpriteMap{
+		"top":   {Width: 16, Height: 16, Type: cartio.SpriteTypeStatic, Pixels: generateTestPixels(16, 16), IsUI: false},
+		"left":  {Width: 16, Height: 16, Type: cartio.SpriteTypeStatic, Pixels: generateTestPixels(16, 16), IsUI: false},
+		"right": {Width: 16, Height: 16, Type: cartio.SpriteTypeStatic, Pixels: generateTestPixels(16, 16), IsUI: false},
+	}
+
+	testCases := []struct {
+		name           string
+		tileWidth      int
+		tileHeight     int
+		height         int
+		expectedWidth  int
+		expectedHeight int
+	}{
+		{"32x24", 32, 16, 8, 32, 24},
+		{"64x48", 64, 32, 16, 64, 48},
+		{"16x12", 16, 8, 4, 16, 12},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			options := TileOptions{
+				TileWidth:   tc.tileWidth,
+				TileHeight:  tc.tileHeight,
+				Height:      tc.height,
+				LightingMode: LightingGradient,
+			}
+
+			result, err := converter.CreateIsometricTile(
+				"top", "left", "right",
+				"", "", "",
+				palette,
+				spriteMap,
+				options,
+			)
+
+			if err != nil {
+				t.Fatalf("CreateIsometricTile() error = %v", err)
+			}
+
+			if result.Width != tc.expectedWidth {
+				t.Errorf("expected width %d, got %d", tc.expectedWidth, result.Width)
+			}
+			if result.Height != tc.expectedHeight {
+				t.Errorf("expected height %d, got %d", tc.expectedHeight, result.Height)
+			}
+		})
+	}
+}

@@ -15,12 +15,10 @@ func TestToSprite_FullPipeline(t *testing.T) {
 		}
 	}
 
-	// Create palette
-	palette := &Palette{Colors: make([]string, 50)}
-	palette.Colors[0] = "#000000"
-	palette.Colors[1] = "#ffffff"
-	palette.Colors[2] = "#ff0000"
-	for i := 3; i < 50; i++ {
+	// Create palette (48 colors for game palette)
+	palette := &Palette{Colors: make([]string, 48)}
+	palette.Colors[0] = "#ff0000" // Red
+	for i := 1; i < 48; i++ {
 		palette.Colors[i] = "#808080"
 	}
 
@@ -58,8 +56,8 @@ func TestToSprite_FullPipeline(t *testing.T) {
 
 func TestToSprite_WithAllProperties(t *testing.T) {
 	img := createTestImage(32, 32, color.RGBA{R: 255, G: 0, B: 0, A: 255})
-	palette := &Palette{Colors: make([]string, 50)}
-	for i := 0; i < 50; i++ {
+	palette := &Palette{Colors: make([]string, 48)}
+	for i := 0; i < 48; i++ {
 		palette.Colors[i] = "#000000"
 	}
 

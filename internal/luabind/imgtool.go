@@ -239,7 +239,7 @@ func paletteToLuaTable(L *lua.LState, palette *imgtool.Palette) *lua.LTable {
 }
 
 func tableToPalette(L *lua.LState, tbl *lua.LTable) (*imgtool.Palette, error) {
-	palette := &imgtool.Palette{Colors: make([]string, 0, 50)}
+	palette := &imgtool.Palette{Colors: make([]string, 0, 48)} // Game palette is 48 colors
 	tbl.ForEach(func(key lua.LValue, value lua.LValue) {
 		if str, ok := value.(lua.LString); ok {
 			palette.Colors = append(palette.Colors, string(str))

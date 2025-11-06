@@ -38,7 +38,7 @@ var (
 
 	ErrInvalidPaletteSize = &ImgToolError{
 		Code:    ErrCodeInvalidPalette,
-		Message: "palette must have exactly 50 colors",
+		Message: "game palette must have exactly 48 colors (built-in colors 0-15 are separate)",
 	}
 
 	ErrInvalidDimensions = &ImgToolError{

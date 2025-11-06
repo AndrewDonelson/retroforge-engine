@@ -1,10 +1,12 @@
 package engine
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
+	"github.com/AndrewDonelson/retroforge-engine/internal/pal"
 	"github.com/AndrewDonelson/retroforge-engine/internal/tile2iso"
 )
 
@@ -18,7 +20,7 @@ func (e *Engine) convertTileToIsometric(tile *cartio.TileData) error {
 	switch tile.Type {
 	case cartio.SpriteTypeStatic:
 		// Convert static tile
-		if err := convertTilePixelsToIsometric(&tile.Pixels, tile.Width, tile.Height, paletteColors); err != nil {
+		if err := e.convertTilePixelsToIsometric(&tile.Pixels, tile.Width, tile.Height, paletteColors); err != nil {
 			return err
 		}
 		// For isometric: width stays same, height becomes width/2 (diamond shape)
@@ -30,7 +32,7 @@ func (e *Engine) convertTileToIsometric(tile *cartio.TileData) error {
 	case cartio.SpriteTypeFrames, cartio.SpriteTypeAnimation:
 		// Convert all frames
 		for i := range tile.Frames {
-			if err := convertTilePixelsToIsometric(&tile.Frames[i].Pixels, tile.Width, tile.Height, paletteColors); err != nil {
+			if err := e.convertTilePixelsToIsometric(&tile.Frames[i].Pixels, tile.Width, tile.Height, paletteColors); err != nil {
 				return err
 			}
 		}
@@ -46,13 +48,16 @@ func (e *Engine) convertTileToIsometric(tile *cartio.TileData) error {
 
 // convertTilePixelsToIsometric converts pixel data to isometric diamond shape
 // Uses proper isometric: rotate 45° + scale Y by 0.5
-func convertTilePixelsToIsometric(pixels *[][]int, width, height int, paletteColors []string) error {
+func (e *Engine) convertTilePixelsToIsometric(pixels *[][]int, width, height int, paletteColors []string) error {
 	if len(*pixels) == 0 {
 		return nil
 	}
 
+	// Get built-in colors
+	builtinColors := pal.BuiltinColors
+	
 	// Convert pixels to image
-	img, err := tile2iso.PixelDataToImage(*pixels, paletteColors)
+	img, err := tile2iso.PixelDataToImage(*pixels, paletteColors, builtinColors)
 	if err != nil {
 		return err
 	}
@@ -64,14 +69,38 @@ func convertTilePixelsToIsometric(pixels *[][]int, width, height int, paletteCol
 		return err
 	}
 
+	// Construct full palette (64 colors) for ImageToPixelData
+	fullPalette := make([]color.RGBA, 64)
+	copy(fullPalette[0:16], builtinColors)
+	// Parse game palette colors and add to full palette
+	for i := 0; i < len(paletteColors) && i < 48; i++ {
+		fullPalette[16+i] = parseHexColor(paletteColors[i])
+	}
+
 	// Convert back to pixel data
-	resultPixels, _, err := tile2iso.ImageToPixelData(isometricImg, paletteColors)
+	resultPixels, err := tile2iso.ImageToPixelData(isometricImg, fullPalette)
 	if err != nil {
 		return err
 	}
 
 	*pixels = resultPixels
 	return nil
+}
+
+// parseHexColor parses a hex color string to color.RGBA
+func parseHexColor(hex string) color.RGBA {
+	if len(hex) > 0 && hex[0] == '#' {
+		hex = hex[1:]
+	}
+	if len(hex) != 6 {
+		return color.RGBA{0, 0, 0, 255}
+	}
+	var r, g, b uint8
+	_, err := fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
+	if err != nil {
+		return color.RGBA{0, 0, 0, 255}
+	}
+	return color.RGBA{r, g, b, 255}
 }
 
 // isIsometricTileset checks if a tileset contains isometric tiles
@@ -139,11 +168,11 @@ func scaleVertical(img image.Image, scaleY float64) image.Image {
 	return dst
 }
 
-// getPaletteColors gets current palette colors as hex strings
+// getPaletteColors gets current game palette colors as hex strings (48 colors for indices 16-63)
 func (e *Engine) getPaletteColors() []string {
-	colors := make([]string, 50)
-	for i := 0; i < 50; i++ {
-		c := e.Pal.Color(i)
+	colors := make([]string, 48)
+	for i := 0; i < 48; i++ {
+		c := e.Pal.Color(16 + i) // Game palette starts at index 16
 		colors[i] = colorToHex(c)
 	}
 	return colors

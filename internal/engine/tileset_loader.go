@@ -92,6 +92,7 @@ func (e *Engine) loadTilemap(tilemapName, tilemapPath string) error {
 		TileMap: tilemap,
 		Tileset: tilesetData.Tiles, // Extract just the tiles map for backward compatibility
 		IsISO:   tilesetData.IsISO, // Store the isometric flag
+		Seed:    tilesetData.Seed,   // Store the seed for tile variation
 	}
 
 	e.tilemapsMap[tilemapName] = tilemapData
@@ -163,6 +164,7 @@ func (e *Engine) loadTilemapFromBytes(tilemapName string, data []byte) error {
 		TileMap: tilemap,
 		Tileset: tilesetData.Tiles, // Extract just the tiles map for backward compatibility
 		IsISO:   tilesetData.IsISO, // Store the isometric flag
+		Seed:    tilesetData.Seed,   // Store the seed for tile variation
 	}
 
 	e.tilemapsMap[tilemapName] = tilemapData

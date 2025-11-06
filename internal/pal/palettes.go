@@ -6,10 +6,31 @@ import (
 	"sort"
 )
 
-// Predefined palettes - all palettes share the same 50 color index structure:
-// - Index 0: black
-// - Index 1: white
-// - Indices 2-49: 16 hues × 3 shades each (highlight, base, shadow)
+// Built-in colors (indices 0-15) - always available
+// These are engine colors that are always available besides the game palette
+var BuiltinColors = []color.RGBA{
+	hexToRGBA("#000000"), // 00: black (0,0,0)
+	hexToRGBA("#202020"), // 01: charcoal - RGB(32, 32, 32)
+	hexToRGBA("#464646"), // 02: slate - RGB(70, 70, 70)
+	hexToRGBA("#6D6D6D"), // 03: steel - RGB(109, 109, 109)
+	hexToRGBA("#939393"), // 04: silver - RGB(147, 147, 147)
+	hexToRGBA("#BABABA"), // 05: ash - RGB(186, 186, 186)
+	hexToRGBA("#E0E0E0"), // 06: smoke - RGB(224, 224, 224)
+	hexToRGBA("#FFFFFF"), // 07: white (255, 255, 255)
+	hexToRGBA("#FF0000"), // 08: red - RGB(255, 0, 0)
+	hexToRGBA("#00FF00"), // 09: green - RGB(0, 255, 0)
+	hexToRGBA("#0000FF"), // 10: blue - RGB(0, 0, 255)
+	hexToRGBA("#FFFF00"), // 11: yellow - RGB(255, 255, 0)
+	hexToRGBA("#00FFFF"), // 12: cyan - RGB(0, 255, 255)
+	hexToRGBA("#FF00FF"), // 13: magenta - RGB(255, 0, 255)
+	hexToRGBA("#FFA500"), // 14: orange - RGB(255, 165, 0)
+	hexToRGBA("#800080"), // 15: purple - RGB(128, 0, 128)
+}
+
+// Predefined palettes - all palettes generate 48 colors (indices 16-63)
+// - Built-in colors: indices 0-15 (always available)
+// - Game palette: indices 16-63 (48 colors from 16 hues × 3 shades each)
+// Total: 64 colors available at any given time
 
 func hexToRGBA(hex string) color.RGBA {
 	// Remove # if present
@@ -53,22 +74,21 @@ func shade(hex string, amount int) string {
 	return fmt.Sprintf("#%02x%02x%02x", r, g, b)
 }
 
-func generate50Palette(baseHues16 []string) []color.RGBA {
-	colors := make([]color.RGBA, 50)
-	colors[0] = hexToRGBA("#000000") // Black
-	colors[1] = hexToRGBA("#ffffff") // White
+// generate48Palette generates 48 colors from 16 base hues (for game palette, indices 16-63)
+func generate48Palette(baseHues16 []string) []color.RGBA {
+	colors := make([]color.RGBA, 48)
 	
-	idx := 2
-	for i := 0; i < 16 && idx < 50; i++ {
+	idx := 0
+	for i := 0; i < 16 && idx < 48; i++ {
 		base := baseHues16[i%len(baseHues16)]
 		colors[idx] = hexToRGBA(shade(base, 60))  // highlight
 		idx++
-		if idx >= 50 {
+		if idx >= 48 {
 			break
 		}
 		colors[idx] = hexToRGBA(base)              // base
 		idx++
-		if idx >= 50 {
+		if idx >= 48 {
 			break
 		}
 		colors[idx] = hexToRGBA(shade(base, -60))  // shadow
@@ -76,7 +96,7 @@ func generate50Palette(baseHues16 []string) []color.RGBA {
 	}
 	
 	// Fill remaining with grayscale if needed
-	for idx < 50 {
+	for idx < 48 {
 		v := uint8((idx * 5) & 255)
 		colors[idx] = color.RGBA{v, v, v, 255}
 		idx++
@@ -85,19 +105,14 @@ func generate50Palette(baseHues16 []string) []color.RGBA {
 	return colors
 }
 
-// generateGrayscale50Palette creates a true grayscale palette with smooth gradient from black to white
-func generateGrayscale50Palette() []color.RGBA {
-	colors := make([]color.RGBA, 50)
-	for i := 0; i < 50; i++ {
-		// Create smooth gradient from black (0) to white (255)
-		// Map index 0-49 to 0-255 with smooth distribution
-		v := uint8((i * 255) / 49)
+// generateGrayscale48Palette creates a true grayscale palette with smooth gradient (48 colors for game palette)
+func generateGrayscale48Palette() []color.RGBA {
+	colors := make([]color.RGBA, 48)
+	for i := 0; i < 48; i++ {
+		// Create smooth gradient from dark gray to white
+		// Map index 0-47 to 32-255 with smooth distribution
+		v := uint8(32 + (i * 223 / 47))
 		colors[i] = color.RGBA{v, v, v, 255}
-	}
-	// Ensure index 0 is pure black and index 1 is pure white (or near-white)
-	colors[0] = color.RGBA{0, 0, 0, 255}
-	if len(colors) > 1 {
-		colors[1] = color.RGBA{255, 255, 255, 255}
 	}
 	return colors
 }
@@ -120,25 +135,39 @@ var huesGameBoyColor = []string{"#0b380f", "#306230", "#8bac0f", "#9bbc0f", "#1b
 var huesCyberpunk = []string{"#ff006e", "#f9c80e", "#00f5d4", "#00bbf9", "#3a0ca3", "#7209b7", "#4361ee", "#4cc9f0", "#f72585", "#b5179e", "#4895ef", "#560bad", "#2b2d42", "#8d99ae", "#ef233c", "#ffd166"}
 var huesMonokai = []string{"#f92672", "#fd971f", "#e6db74", "#a6e22e", "#66d9ef", "#ae81ff", "#f8f8f2", "#75715e", "#272822", "#1e1f29", "#ff6188", "#fc9867", "#ffd866", "#a9dc76", "#78dce8", "#ab9df2"}
 
-// Predefined palettes map
+// Predefined palettes map - each palette contains 48 colors (for game palette, indices 16-63)
 var predefinedPalettes = map[string][]color.RGBA{
-	"default":      Default50,
-	"RetroForge 50": generate50Palette(huesRetroForge),
-	"PICO-8+ 50":   generate50Palette(huesPICO8),
-	"Neon 50":      generate50Palette(huesNeon),
-	"Pastel 50":    generate50Palette(huesPastel),
-	"Earth 50":     generate50Palette(huesEarth),
-	"Warcraft 50":  generate50Palette(huesWarcraft),
-	"StarCraft 50": generate50Palette(huesStarCraft),
-	"Super Mario 50": generate50Palette(huesSuperMario),
-	"Grayscale 50": generateGrayscale50Palette(),
-	"NES 50":       generate50Palette(huesNES),
-	"SNES 50":      generate50Palette(huesSNES),
-	"Genesis 50":   generate50Palette(huesGenesis),
-	"Amiga 50":     generate50Palette(huesAmiga),
-	"Game Boy Color 50": generate50Palette(huesGameBoyColor),
-	"Cyberpunk 50": generate50Palette(huesCyberpunk),
-	"Monokai 50":   generate50Palette(huesMonokai),
+	"default":      Default48,
+	"RetroForge 48": generate48Palette(huesRetroForge),
+	"PICO-8+ 48":   generate48Palette(huesPICO8),
+	"Neon 48":      generate48Palette(huesNeon),
+	"Pastel 48":    generate48Palette(huesPastel),
+	"Earth 48":     generate48Palette(huesEarth),
+	"Warcraft 48":  generate48Palette(huesWarcraft),
+	"StarCraft 48": generate48Palette(huesStarCraft),
+	"Super Mario 48": generate48Palette(huesSuperMario),
+	"Grayscale 48": generateGrayscale48Palette(),
+	"NES 48":       generate48Palette(huesNES),
+	"SNES 48":      generate48Palette(huesSNES),
+	"Genesis 48":   generate48Palette(huesGenesis),
+	"Amiga 48":     generate48Palette(huesAmiga),
+	"Game Boy Color 48": generate48Palette(huesGameBoyColor),
+	"Cyberpunk 48": generate48Palette(huesCyberpunk),
+	"Monokai 48":   generate48Palette(huesMonokai),
+}
+
+// GetFullPalette returns the complete 64-color palette (16 built-in + 48 game colors)
+func GetFullPalette(gamePaletteName string) []color.RGBA {
+	gamePalette := GetPalette(gamePaletteName)
+	full := make([]color.RGBA, 64)
+	
+	// Copy built-in colors (0-15)
+	copy(full[0:16], BuiltinColors)
+	
+	// Copy game palette (16-63)
+	copy(full[16:64], gamePalette)
+	
+	return full
 }
 
 // GetPaletteNames returns all available palette names
@@ -152,12 +181,13 @@ func GetPaletteNames() []string {
 	return names
 }
 
-// GetPalette returns a copy of the named palette, or default if not found
+// GetPalette returns a copy of the named 48-color game palette, or default if not found
+// This returns only the game palette colors (48 colors), not the full 64-color palette
 func GetPalette(name string) []color.RGBA {
 	if pal, ok := predefinedPalettes[name]; ok {
 		// Return a copy
 		return append([]color.RGBA{}, pal...)
 	}
 	// Return default if not found
-	return append([]color.RGBA{}, Default50...)
+	return append([]color.RGBA{}, Default48...)
 }

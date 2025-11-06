@@ -9,23 +9,23 @@ func TestPalette_Validate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid 50 colors",
+			name: "valid 48 colors",
 			palette: &Palette{
-				Colors: make([]string, 50),
+				Colors: make([]string, 48),
 			},
 			wantErr: false,
+		},
+		{
+			name: "invalid - 47 colors",
+			palette: &Palette{
+				Colors: make([]string, 47),
+			},
+			wantErr: true,
 		},
 		{
 			name: "invalid - 49 colors",
 			palette: &Palette{
 				Colors: make([]string, 49),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - 51 colors",
-			palette: &Palette{
-				Colors: make([]string, 51),
 			},
 			wantErr: true,
 		},
@@ -256,7 +256,7 @@ func TestSprite_Validate(t *testing.T) {
 				}
 				for j := range tt.sprite.Pixels[i] {
 					if tt.name == "invalid - palette index too high" {
-						tt.sprite.Pixels[i][j] = 50 // Invalid: > 49
+						tt.sprite.Pixels[i][j] = 64 // Invalid: > 63 (max is 63 for 64-color system)
 					} else if tt.name == "invalid - palette index too low" {
 						tt.sprite.Pixels[i][j] = -2 // Invalid: < -1
 					} else {

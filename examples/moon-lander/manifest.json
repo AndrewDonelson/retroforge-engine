@@ -11,7 +11,7 @@
     "genre": "Demo",
     "tags": ["example", "lander"],
     "entry": "main.lua",
-    "palette": "Grayscale 50",
+    "palette": "Grayscale 48",
     "scale": 1
   },
   "manifestKeys": [

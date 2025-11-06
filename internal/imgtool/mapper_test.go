@@ -15,12 +15,10 @@ func TestMapPalette_ExactMatch(t *testing.T) {
 		}
 	}
 
-	// Create palette with red at index 2
-	palette := &Palette{Colors: make([]string, 50)}
-	palette.Colors[0] = "#000000"
-	palette.Colors[1] = "#ffffff"
-	palette.Colors[2] = "#ff0000"
-	for i := 3; i < 50; i++ {
+	// Create palette with red at index 0 (game palette, 48 colors)
+	palette := &Palette{Colors: make([]string, 48)}
+	palette.Colors[0] = "#ff0000" // Red
+	for i := 1; i < 48; i++ {
 		palette.Colors[i] = "#808080"
 	}
 
@@ -30,11 +28,13 @@ func TestMapPalette_ExactMatch(t *testing.T) {
 		t.Fatalf("MapPalette() error = %v", err)
 	}
 
-	// All pixels should map to index 2 (red)
+	// All pixels should map to index 0 (red in game palette)
+	// Note: In full 64-color system, this would be index 16 (game palette starts at 16)
+	// But MapPalette just maps to the provided palette indices (0-47 for game palette)
 	for y := range indices {
 		for x := range indices[y] {
-			if indices[y][x] != 2 {
-				t.Errorf("MapPalette() [%d][%d] = %v, want 2", y, x, indices[y][x])
+			if indices[y][x] != 0 {
+				t.Errorf("MapPalette() [%d][%d] = %v, want 0", y, x, indices[y][x])
 			}
 		}
 	}
@@ -49,8 +49,8 @@ func TestMapPalette_TransparentPixels(t *testing.T) {
 		}
 	}
 
-	palette := &Palette{Colors: make([]string, 50)}
-	for i := 0; i < 50; i++ {
+	palette := &Palette{Colors: make([]string, 48)}
+	for i := 0; i < 48; i++ {
 		palette.Colors[i] = "#000000"
 	}
 
@@ -75,7 +75,7 @@ func TestMapPalette_TransparentPixels(t *testing.T) {
 
 func TestMapPalette_InvalidPalette(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
-	palette := &Palette{Colors: make([]string, 49)} // Wrong size
+	palette := &Palette{Colors: make([]string, 47)} // Wrong size (should be 48)
 
 	opts := DefaultMapPaletteOptions()
 	_, err := MapPalette(img, palette, opts)

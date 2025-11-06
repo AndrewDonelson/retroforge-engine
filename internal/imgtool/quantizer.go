@@ -5,7 +5,8 @@ import (
 	"sort"
 )
 
-// Quantize reduces an image to a 50-color palette
+// Quantize reduces an image to a 48-color game palette
+// Note: Built-in colors (0-15) are always available, this generates only the game palette (48 colors)
 func Quantize(img image.Image, opts QuantizeOptions) (*Palette, error) {
 	bounds := img.Bounds()
 	width := bounds.Dx()
@@ -32,37 +33,23 @@ func Quantize(img image.Image, opts QuantizeOptions) (*Palette, error) {
 		}
 	}
 
-	// If we have 50 or fewer colors, use them directly
-	if len(colors) <= 50 {
-		palette := &Palette{Colors: make([]string, 50)}
+	// If we have 48 or fewer colors, use them directly
+	if len(colors) <= 48 {
+		palette := &Palette{Colors: make([]string, 48)}
 		
-		// Ensure black and white at indices 0 and 1
-
 		idx := 0
-		if opts.EnforceBlackWhite {
-			palette.Colors[0] = "#000000"
-			palette.Colors[1] = "#ffffff"
-			idx = 2
-		}
-
-		// Add existing colors
+		// Add existing colors (no need to enforce black/white since they're in built-in colors)
 		for _, c := range colors {
-			if idx >= 50 {
+			if idx >= 48 {
 				break
-			}
-			// Skip if it's black/white and we're enforcing
-			if opts.EnforceBlackWhite {
-				if (c.R == 0 && c.G == 0 && c.B == 0) || (c.R == 255 && c.G == 255 && c.B == 255) {
-					continue
-				}
 			}
 			palette.Colors[idx] = c.ToHex()
 			idx++
 		}
 
 		// Fill remaining with grayscale if needed
-		for idx < 50 {
-			v := uint8((idx * 255) / 49)
+		for idx < 48 {
+			v := uint8(32 + (idx * 223 / 47)) // Range from 32 to 255
 			palette.Colors[idx] = Color{R: v, G: v, B: v}.ToHex()
 			idx++
 		}
@@ -71,24 +58,15 @@ func Quantize(img image.Image, opts QuantizeOptions) (*Palette, error) {
 	}
 
 	// Too many colors - need quantization
-	// Use median cut algorithm (simplified version)
-	targetColors := 48 // Default to 48 for remaining slots after black/white
-	if !opts.EnforceBlackWhite {
-		targetColors = 50
-	}
+	// Use median cut algorithm to generate 48 colors
+	targetColors := 48
 	quantized := medianCutQuantize(colors, targetColors)
 	
-	palette := &Palette{Colors: make([]string, 50)}
+	palette := &Palette{Colors: make([]string, 48)}
 	
 	idx := 0
-	if opts.EnforceBlackWhite {
-		palette.Colors[0] = "#000000"
-		palette.Colors[1] = "#ffffff"
-		idx = 2
-	}
-
 	for _, c := range quantized {
-		if idx >= 50 {
+		if idx >= 48 {
 			break
 		}
 		palette.Colors[idx] = c.ToHex()
@@ -96,8 +74,8 @@ func Quantize(img image.Image, opts QuantizeOptions) (*Palette, error) {
 	}
 
 	// Fill remaining slots
-	for idx < 50 {
-		v := uint8((idx * 255) / 49)
+	for idx < 48 {
+		v := uint8(32 + (idx * 223 / 47)) // Range from 32 to 255
 		palette.Colors[idx] = Color{R: v, G: v, B: v}.ToHex()
 		idx++
 	}

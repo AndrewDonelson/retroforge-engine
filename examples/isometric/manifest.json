@@ -11,7 +11,7 @@
     "genre": "Demo",
     "tags": ["example", "demo", "isometric", "tilemap", "tileset"],
     "entry": "main.lua",
-    "palette": "RetroForge 50",
+    "palette": "RetroForge 48",
     "scale": 1
   },
   "manifestKeys": [

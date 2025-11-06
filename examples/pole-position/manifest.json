@@ -11,7 +11,7 @@
     "genre": "Racing",
     "tags": ["racing", "arcade", "procedural"],
     "entry": "main.lua",
-    "palette": "Super Mario 50",
+    "palette": "Super Mario 48",
     "scale": 1
   },
   "manifestKeys": [

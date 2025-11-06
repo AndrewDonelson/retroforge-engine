@@ -2,11 +2,13 @@
 """
 Generate RetroForge logo sprite data from SVG description.
 The icon is a 48x48 box with:
-- Dark blue background (#0f172a) = palette index 16
-- Cyan border (#0369a1, closest to #0081bc) = palette index 49  
+- Dark blue background (#0f172a) = palette index 16 (game palette index 0)
+- Cyan border (#0369a1, closest to #0081bc) = palette index 49 (game palette index 33)
 - Dotted white line at y=12
-- Cyan "RF" text centered (palette index 48)
+- Cyan "RF" text centered (palette index 48, game palette index 32)
 - Solid white line at y=42
+
+Note: Uses full 64-color palette indices (0-63): 0-15 built-in, 16-63 game palette.
 """
 
 WIDTH = 48
@@ -18,7 +20,7 @@ BLACK = 0
 WHITE = 1
 DARK_BLUE = 16  # #0f172a
 CYAN_BLUE = 48  # #38bdf8
-DARK_CYAN = 49  # #0081bc (closest to #0369a1 border)
+DARK_CYAN = 49  # #0081bc (closest to #0369a1 border, game palette index 33)
 
 # Create empty sprite (all transparent)
 sprite = [[TRANSPARENT for _ in range(WIDTH)] for _ in range(HEIGHT)]

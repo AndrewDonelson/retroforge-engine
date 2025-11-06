@@ -1868,7 +1868,7 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 			// For now, draw an 8x8 rectangle representing the tile
 			// Full implementation would look up sprite by index
 			if tileIndex > 0 {
-				c := colorByIndexRemapped(tileIndex % 50) // Use tile index as color
+				c := colorByIndexRemapped(tileIndex % 64) // Use tile index as color (0-63)
 				r.RectFill(x, y, x+7, y+7, color.RGBA{c[0], c[1], c[2], c[3]})
 			}
 		})
@@ -2593,6 +2593,7 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		// Render all tiles
 		tilesDrawn := 0
 		pixelsDrawn := 0
+		debugLog("drawTilemap: Rendering %d tiles (IsISO=%v)", len(renderQueue), tilemapData.IsISO)
 		for _, tileInfo := range renderQueue {
 			tile, exists := tilemapData.Tileset[tileInfo.tileName]
 			if !exists {
@@ -2617,16 +2618,117 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 				continue
 			}
 
+			// Apply tile variation (rotation/flipping) for normal tiles only
+			// Isometric tiles cannot be rotated/flipped (would break 3D appearance)
+			// For seamless tiles, we only apply variations when adjacent tiles are different types
+			var drawWidth, drawHeight int = tile.Width, tile.Height
+			if !tilemapData.IsISO {
+				// Check if adjacent tiles are the same type to maintain seamlessness
+				shouldVary := true
+				adjacentTiles := []string{
+					"", // top (will check if exists)
+					"", // right
+					"", // bottom
+					"", // left
+				}
+				
+				// Get adjacent tile names (if they exist)
+				if tileInfo.gridY > 0 && tileInfo.gridY-1 < len(tilemapData.Tiles) && tileInfo.gridX < len(tilemapData.Tiles[tileInfo.gridY-1]) {
+					adjacentTiles[0] = tilemapData.Tiles[tileInfo.gridY-1][tileInfo.gridX] // top
+				}
+				if tileInfo.gridX+1 < len(tilemapData.Tiles[tileInfo.gridY]) {
+					adjacentTiles[1] = tilemapData.Tiles[tileInfo.gridY][tileInfo.gridX+1] // right
+				}
+				if tileInfo.gridY+1 < len(tilemapData.Tiles) && tileInfo.gridX < len(tilemapData.Tiles[tileInfo.gridY+1]) {
+					adjacentTiles[2] = tilemapData.Tiles[tileInfo.gridY+1][tileInfo.gridX] // bottom
+				}
+				if tileInfo.gridX > 0 {
+					adjacentTiles[3] = tilemapData.Tiles[tileInfo.gridY][tileInfo.gridX-1] // left
+				}
+				
+				// If any adjacent tile is the same type, don't apply variation to maintain seamlessness
+				for _, adjTileName := range adjacentTiles {
+					if adjTileName == tileInfo.tileName {
+						shouldVary = false
+						break
+					}
+				}
+				
+				if shouldVary {
+					variation := cartio.GetTileVariation(tilemapData.Seed, tileInfo.gridX, tileInfo.gridY, false)
+					var transformedPixels [][]int
+					transformedPixels, drawWidth, drawHeight = cartio.ApplyVariation(pixels, tile.Width, tile.Height, variation)
+					pixels = transformedPixels
+				}
+			}
+
+			// For isometric tiles: enforce DIRT sides (bottom left and bottom right)
+			// The side faces are always DIRT, cannot be any other type
+			if tilemapData.IsISO {
+				// Isometric tiles have structure:
+				// - Top diamond: Y=0 to Y=tileHeight (16px for 32x24 tiles)
+				// - Side faces: Y=tileHeight to Y=tileHeight+sideHeight (16 to 24px)
+				//   - Left side: X=0 to X=tileWidth/2 (0 to 16px)
+				//   - Right side: X=tileWidth/2 to X=tileWidth (16 to 32px)
+				// Replace side face pixels with DIRT tile pixels if available
+				dirtTile, hasDirt := tilemapData.Tileset["dirt"]
+				if hasDirt && len(pixels) > tile.Height {
+					// Get DIRT tile pixels (use first frame if multi-frame)
+					var dirtPixels [][]int
+					switch dirtTile.Type {
+					case cartio.SpriteTypeStatic:
+						dirtPixels = dirtTile.Pixels
+					case cartio.SpriteTypeFrames, cartio.SpriteTypeAnimation:
+						if len(dirtTile.Frames) > 0 {
+							dirtPixels = dirtTile.Frames[0].Pixels
+						}
+					}
+					
+					if dirtPixels != nil && len(dirtPixels) > 0 {
+						// Calculate side face dimensions
+						// For 32x24 isometric tiles: tileHeight=16, sideHeight=8
+						// Side faces start at Y=tileHeight (16) and go to Y=tileHeight+sideHeight (24)
+						sideStartY := tile.Height // 16 for 32x24 tiles
+						sideHeight := len(pixels) - tile.Height // 8 for 32x24 tiles
+						sideWidth := tile.Width / 2 // 16 for 32x24 tiles
+						
+						// Replace left side face (X=0 to X=sideWidth, Y=sideStartY to Y=sideStartY+sideHeight)
+						for y := sideStartY; y < len(pixels) && y < sideStartY+sideHeight; y++ {
+							dirtY := y - sideStartY
+							if dirtY < len(dirtPixels) {
+								for x := 0; x < sideWidth && x < len(pixels[y]) && x < len(dirtPixels[dirtY]); x++ {
+									// Replace with DIRT pixel (use modulo to handle size differences)
+									dirtX := x % len(dirtPixels[dirtY])
+									pixels[y][x] = dirtPixels[dirtY][dirtX]
+								}
+							}
+						}
+						
+						// Replace right side face (X=sideWidth to X=tileWidth, Y=sideStartY to Y=sideStartY+sideHeight)
+						for y := sideStartY; y < len(pixels) && y < sideStartY+sideHeight; y++ {
+							dirtY := y - sideStartY
+							if dirtY < len(dirtPixels) {
+								for x := sideWidth; x < tile.Width && x < len(pixels[y]); x++ {
+									// Replace with DIRT pixel (use modulo to handle size differences)
+									dirtX := (x - sideWidth) % len(dirtPixels[dirtY])
+									pixels[y][x] = dirtPixels[dirtY][dirtX]
+								}
+							}
+						}
+					}
+				}
+			}
+
 			// Draw tile pixels
 			// Validate pixels array dimensions
-			if len(pixels) != tile.Height {
-				debugLog("drawTilemap: Tile '%s' has invalid pixel height: %d (expected %d)", tileInfo.tileName, len(pixels), tile.Height)
+			if len(pixels) != drawHeight {
+				debugLog("drawTilemap: Tile '%s' has invalid pixel height: %d (expected %d)", tileInfo.tileName, len(pixels), drawHeight)
 				continue // Skip invalid tile
 			}
 			tilePixelsDrawn := 0
 			for ty, pixelRow := range pixels {
-				if len(pixelRow) != tile.Width {
-					debugLog("drawTilemap: Tile '%s' row %d has invalid width: %d (expected %d)", tileInfo.tileName, ty, len(pixelRow), tile.Width)
+				if len(pixelRow) != drawWidth {
+					debugLog("drawTilemap: Tile '%s' row %d has invalid width: %d (expected %d)", tileInfo.tileName, ty, len(pixelRow), drawWidth)
 					continue // Skip invalid row
 				}
 				for tx, colorIdx := range pixelRow {
@@ -2634,8 +2736,8 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 					if colorIdx < 0 {
 						continue
 					}
-					// Valid color index is 0-49
-					if colorIdx >= 0 && colorIdx < 50 {
+					// Valid color index is 0-63 (16 built-in + 48 game palette)
+					if colorIdx >= 0 && colorIdx < 64 {
 						px := tileInfo.screenX + tx
 						py := tileInfo.screenY + ty
 						// Only draw if within screen bounds
@@ -2656,6 +2758,8 @@ func RegisterWithDevMode(L *lua.LState, r graphics.Renderer, colorByIndex ColorB
 		// Only log if there's an issue (no tiles drawn) or very rarely (smart logging will throttle)
 		if tilesDrawn == 0 {
 			debugLog("drawTilemap: WARNING - No tiles drawn for tilemap '%s'", mapName)
+		} else {
+			debugLog("drawTilemap: Successfully rendered %d tiles (%d pixels) for '%s'", tilesDrawn, pixelsDrawn, mapName)
 		}
 
 		return 0

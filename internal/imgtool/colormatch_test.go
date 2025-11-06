@@ -46,8 +46,8 @@ func TestFindClosestPaletteColor(t *testing.T) {
 			"#0000ff", // 4 - blue
 		},
 	}
-	// Fill to 50
-	for len(palette.Colors) < 50 {
+	// Fill to 48 (game palette size)
+	for len(palette.Colors) < 48 {
 		palette.Colors = append(palette.Colors, "#808080")
 	}
 

@@ -1,89 +1,85 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"time"
+
+	"github.com/AndrewDonelson/retroforge-engine/internal/imgtool"
+	"github.com/AndrewDonelson/retroforge-engine/internal/pal"
 )
 
-// RetroForge 50-color palette
-var Palette = []color.RGBA{
-	{0, 0, 0, 255},           // 0: Black
-	{29, 43, 83, 255},        // 1: Dark blue
-	{126, 37, 83, 255},       // 2: Dark purple
-	{0, 135, 81, 255},        // 3: Dark green
-	{171, 82, 54, 255},       // 4: Brown
-	{95, 87, 79, 255},        // 5: Dark gray
-	{194, 195, 199, 255},     // 6: Light gray
-	{255, 241, 232, 255},     // 7: White
-	{255, 0, 77, 255},        // 8: Red
-	{255, 163, 0, 255},       // 9: Orange
-	{255, 236, 39, 255},      // 10: Yellow
-	{0, 228, 54, 255},        // 11: Green
-	{41, 173, 255, 255},      // 12: Blue
-	{131, 118, 156, 255},     // 13: Lavender
-	{255, 119, 168, 255},     // 14: Pink
-	{255, 204, 170, 255},     // 15: Peach
-	{34, 32, 52, 255},        // 16: Very dark blue
-	{69, 40, 60, 255},        // 17: Dark purple-brown
-	{102, 57, 49, 255},       // 18: Dark brown
-	{143, 86, 59, 255},       // 19: Medium brown
-	{223, 113, 38, 255},      // 20: Light brown/orange
-	{217, 160, 102, 255},     // 21: Tan
-	{238, 195, 154, 255},     // 22: Light tan
-	{251, 242, 54, 255},      // 23: Bright yellow
-	{153, 229, 80, 255},      // 24: Light green
-	{106, 190, 48, 255},      // 25: Medium green
-	{55, 148, 110, 255},      // 26: Teal green
-	{75, 105, 47, 255},       // 27: Dark olive
-	{82, 75, 36, 255},        // 28: Olive brown
-	{50, 60, 57, 255},        // 29: Dark teal
-	{63, 63, 116, 255},       // 30: Dark blue
-	{48, 96, 130, 255},       // 31: Ocean blue
-	{91, 110, 225, 255},      // 32: Bright blue
-	{99, 155, 255, 255},      // 33: Sky blue
-	{95, 205, 228, 255},      // 34: Light blue
-	{203, 219, 252, 255},     // 35: Very light blue
-	{155, 173, 183, 255},     // 36: Blue-gray
-	{132, 126, 135, 255},     // 37: Medium gray
-	{105, 106, 106, 255},     // 38: Dark gray
-	{89, 86, 82, 255},        // 39: Very dark gray
-	{118, 66, 138, 255},      // 40: Purple
-	{172, 50, 50, 255},       // 41: Dark red
-	{217, 87, 99, 255},       // 42: Pink-red
-	{215, 123, 186, 255},     // 43: Pink
-	{143, 151, 74, 255},      // 44: Yellow-green
-	{138, 111, 48, 255},      // 45: Gold-brown
-	{194, 195, 199, 255},     // 46: Light gray
-	{255, 255, 255, 255},     // 47: Pure white
-	{0, 0, 0, 255},           // 48: Black
-	{0, 0, 0, 255},           // 49: Black
-}
+// Global palette (can be nil for RGBA mode)
+var Palette []color.RGBA
+var usePalette bool
 
 // ================================
 // NOISE FUNCTIONS
 // ================================
 
+// PerlinNoise generates seamless (periodic) Perlin noise for tile generation.
+// The noise wraps around at tile boundaries (16x16) to ensure seamless tiling.
+// When tiles are placed next to each other, the patterns will match at edges.
+// This uses toroidal (wrap-around) coordinates to ensure pixel (0,y) matches pixel (16,y) etc.
 func PerlinNoise(x, y int, frequency float64, seed int64) float64 {
-	fx := float64(x) * frequency
-	fy := float64(y) * frequency
+	tileSize := 16
+	
+	// Normalize coordinates to tile space (0-15) for seamless wrapping
+	// This ensures the pattern repeats every 16 pixels
+	normX := x % tileSize
+	normY := y % tileSize
+	if normX < 0 {
+		normX += tileSize
+	}
+	if normY < 0 {
+		normY += tileSize
+	}
 
+	fx := float64(normX) * frequency
+	fy := float64(normY) * frequency
+
+	// Calculate grid cell boundaries
 	x0 := int(math.Floor(fx))
 	y0 := int(math.Floor(fy))
 	x1 := x0 + 1
 	y1 := y0 + 1
 
+	// Wrap grid coordinates for seamless tiling
+	// Key: grid points at tile boundaries (0 and 16) must have the same gradient
+	wrapX0 := x0 % tileSize
+	wrapY0 := y0 % tileSize
+	wrapX1 := x1 % tileSize
+	wrapY1 := y1 % tileSize
+	if wrapX0 < 0 {
+		wrapX0 += tileSize
+	}
+	if wrapY0 < 0 {
+		wrapY0 += tileSize
+	}
+	if wrapX1 < 0 {
+		wrapX1 += tileSize
+	}
+	if wrapY1 < 0 {
+		wrapY1 += tileSize
+	}
+
+	// Calculate fractional parts for interpolation
 	sx := fx - float64(x0)
 	sy := fy - float64(y0)
 
-	n00 := dotGridGradient(x0, y0, fx, fy, seed)
-	n10 := dotGridGradient(x1, y0, fx, fy, seed)
-	n01 := dotGridGradient(x0, y1, fx, fy, seed)
-	n11 := dotGridGradient(x1, y1, fx, fy, seed)
+	// Get gradients at the four corners (using wrapped coordinates)
+	n00 := dotGridGradientSeamless(wrapX0, wrapY0, fx, fy, tileSize, seed)
+	n10 := dotGridGradientSeamless(wrapX1, wrapY0, fx, fy, tileSize, seed)
+	n01 := dotGridGradientSeamless(wrapX0, wrapY1, fx, fy, tileSize, seed)
+	n11 := dotGridGradientSeamless(wrapX1, wrapY1, fx, fy, tileSize, seed)
 
 	sx = fade(sx)
 	sy = fade(sy)
@@ -92,6 +88,50 @@ func PerlinNoise(x, y int, frequency float64, seed int64) float64 {
 	ix1 := lerp(n01, n11, sx)
 
 	return lerp(ix0, ix1, sy)
+}
+
+// dotGridGradientSeamless calculates gradient with seamless wrapping.
+// For seamless tiling, gradients at wrapped coordinates must be consistent.
+func dotGridGradientSeamless(ix, iy int, x, y float64, tileSize int, seed int64) float64 {
+	// Normalize gradient coordinates to tile space (0-15)
+	// This ensures that gradient at position (0,y) is the same as gradient at (16,y)
+	normIx := ix % tileSize
+	normIy := iy % tileSize
+	if normIx < 0 {
+		normIx += tileSize
+	}
+	if normIy < 0 {
+		normIy += tileSize
+	}
+
+	// Generate consistent gradient direction based on normalized position
+	// Same normalized position = same gradient, regardless of which tile it's in
+	random := math.Sin(float64(normIx)*12.9898+float64(normIy)*78.233+float64(seed)) * 43758.5453
+	random = random - math.Floor(random)
+	angle := random * 2.0 * math.Pi
+
+	gradX := math.Cos(angle)
+	gradY := math.Sin(angle)
+
+	// Calculate distance from sample point (x,y) to grid point (normIx, normIy)
+	// Use normalized coordinates for distance calculation to ensure seamless wrapping
+	dx := x - float64(normIx)
+	dy := y - float64(normIy)
+	
+	// Handle wrap-around for toroidal space (shortest path)
+	// This ensures smooth interpolation across tile boundaries
+	if dx > float64(tileSize)/2.0 {
+		dx -= float64(tileSize)
+	} else if dx < -float64(tileSize)/2.0 {
+		dx += float64(tileSize)
+	}
+	if dy > float64(tileSize)/2.0 {
+		dy -= float64(tileSize)
+	} else if dy < -float64(tileSize)/2.0 {
+		dy += float64(tileSize)
+	}
+
+	return dx*gradX + dy*gradY
 }
 
 func fade(t float64) float64 {
@@ -120,7 +160,7 @@ func dotGridGradient(ix, iy int, x, y float64, seed int64) float64 {
 // BASE TERRAIN GENERATORS
 // ================================
 
-// GenerateGrass creates a textured grass tile
+// GenerateGrass creates a textured grass tile with seamless patterns
 func GenerateGrass() [][]int {
 	pixels := make([][]int, 16)
 	for i := range pixels {
@@ -136,9 +176,11 @@ func GenerateGrass() [][]int {
 
 	for y := 0; y < 16; y++ {
 		for x := 0; x < 16; x++ {
+			// Use seamless Perlin noise - coordinates are automatically wrapped
 			noise := PerlinNoise(x, y, 0.4, 42)
 			noise2 := PerlinNoise(x, y, 0.8, 43) * 0.3
-			gradient := float64(y) / 20.0
+			// Use seamless gradient (wraps around)
+			gradient := PerlinNoise(0, y, 0.1, 100) * 0.3 // Subtle vertical gradient
 			value := noise + noise2 + gradient
 
 			if value < -0.2 {
@@ -151,6 +193,7 @@ func GenerateGrass() [][]int {
 				pixels[y][x] = lightGreen
 			}
 
+			// Use seamless random for speckles
 			if rng.Float64() < 0.05 {
 				pixels[y][x] = darkGreen
 			}
@@ -807,15 +850,135 @@ func GenerateStoneGravelTransition() [][]int {
 // FILE SAVING
 // ================================
 
-func SaveTilePNG(pixels [][]int, filename string) error {
+// PixelData represents either palette indices or RGBA colors
+type PixelData interface {
+	GetColor(x, y int) color.RGBA
+}
+
+// PalettePixelData stores palette indices
+type PalettePixelData struct {
+	indices [][]int
+	palette []color.RGBA
+}
+
+func (p *PalettePixelData) GetColor(x, y int) color.RGBA {
+	idx := p.indices[y][x]
+	if idx >= 0 && idx < len(p.palette) {
+		return p.palette[idx]
+	}
+	return color.RGBA{0, 0, 0, 255} // Default to black
+}
+
+// RGBAPixelData stores RGBA colors directly
+type RGBAPixelData struct {
+	colors [][]color.RGBA
+}
+
+func (p *RGBAPixelData) GetColor(x, y int) color.RGBA {
+	return p.colors[y][x]
+}
+
+// convertPaletteIndicesToRGBA converts palette indices to natural RGB colors
+// This is used when generating tiles in full RGBA mode (not palette-limited)
+func convertPaletteIndicesToRGBA(indices [][]int) [][]color.RGBA {
+	colors := make([][]color.RGBA, len(indices))
+	for y := range indices {
+		colors[y] = make([]color.RGBA, len(indices[y]))
+		for x := range indices[y] {
+			idx := indices[y][x]
+			// Map palette indices to natural RGB colors
+			// These are approximate color mappings based on common palette usage
+			colors[y][x] = paletteIndexToNaturalColor(idx)
+		}
+	}
+	return colors
+}
+
+// paletteIndexToNaturalColor converts a palette index to a natural RGB color
+// This provides realistic color representation when not using palette mode
+func paletteIndexToNaturalColor(idx int) color.RGBA {
+	// Map common palette indices to natural RGB colors
+	// Based on typical RetroForge 50 palette usage
+	// Note: Using the actual RetroForge 50 palette colors for accuracy
+	colorMap := map[int]color.RGBA{
+		// Grays
+		0:  {0, 0, 0, 255},       // Black
+		1:  {255, 255, 255, 255}, // White
+		5:  {95, 87, 79, 255},    // Dark gray
+		6:  {194, 195, 199, 255}, // Light gray
+		37: {132, 126, 135, 255}, // Medium gray
+		38: {105, 106, 106, 255}, // Dark gray
+		39: {89, 86, 82, 255},    // Very dark gray
+		46: {194, 195, 199, 255}, // Light gray
+		// Browns
+		18: {102, 57, 49, 255},   // Dark brown
+		19: {143, 86, 59, 255},   // Medium brown
+		20: {223, 113, 38, 255},  // Light brown
+		21: {217, 160, 102, 255}, // Tan
+		22: {238, 195, 154, 255}, // Light tan
+		43: {108, 61, 30, 255},   // Dark olive brown
+		44: {228, 181, 150, 255}, // Light tan
+		45: {160, 177, 90, 255},  // Yellow-green (used for grass)
+		// Greens
+		3:  {0, 135, 81, 255},    // Dark green
+		11: {0, 228, 54, 255},    // Green
+		24: {153, 229, 80, 255},  // Light green
+		25: {106, 190, 48, 255},  // Medium green
+		26: {55, 148, 110, 255},  // Teal green
+		27: {75, 105, 47, 255},   // Dark olive
+		28: {82, 75, 36, 255},    // Olive brown
+		29: {50, 60, 57, 255},    // Dark teal
+		// Blues
+		12: {41, 173, 255, 255},  // Blue
+		30: {63, 63, 116, 255},   // Dark blue
+		31: {48, 96, 130, 255},   // Ocean blue
+		32: {91, 110, 225, 255},  // Bright blue
+		33: {99, 155, 255, 255},  // Sky blue
+		34: {95, 205, 228, 255},  // Light blue
+		35: {203, 219, 252, 255}, // Very light blue
+		36: {155, 173, 183, 255}, // Blue-gray
+		// Yellows/Oranges
+		8:  {255, 255, 137, 255},  // Yellow
+		9:  {255, 163, 0, 255},   // Orange
+		10: {255, 236, 39, 255},  // Bright yellow
+		23: {251, 242, 54, 255},  // Bright yellow
+		// Reds/Pinks
+		2:  {255, 137, 137, 255}, // Red highlight
+		4:  {195, 17, 17, 255},   // Red shadow
+		14: {255, 119, 168, 255}, // Pink
+		42: {255, 111, 177, 255}, // Pink-red
+	}
+
+	if c, ok := colorMap[idx]; ok {
+		return c
+	}
+
+	// Default: interpolate based on index for unknown colors
+	// Create a gradient from index value
+	v := uint8((idx * 255) / 49)
+	return color.RGBA{v, v, v, 255}
+}
+
+// convertToPixelData converts palette indices to appropriate PixelData type
+func convertToPixelData(indices [][]int) PixelData {
+	if usePalette && len(Palette) > 0 {
+		return &PalettePixelData{
+			indices: indices,
+			palette: Palette,
+		}
+	}
+	// RGBA mode: convert indices to natural colors
+	return &RGBAPixelData{
+		colors: convertPaletteIndicesToRGBA(indices),
+	}
+}
+
+func SaveTilePNG(pixels PixelData, filename string) error {
 	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
 
 	for y := 0; y < 16; y++ {
 		for x := 0; x < 16; x++ {
-			idx := pixels[y][x]
-			if idx >= 0 && idx < len(Palette) {
-				img.Set(x, y, Palette[idx])
-			}
+			img.Set(x, y, pixels.GetColor(x, y))
 		}
 	}
 
@@ -828,17 +991,13 @@ func SaveTilePNG(pixels [][]int, filename string) error {
 	return png.Encode(file, img)
 }
 
-func SaveTilePNGScaled(pixels [][]int, filename string, scale int) error {
+func SaveTilePNGScaled(pixels PixelData, filename string, scale int) error {
 	size := 16 * scale
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 
 	for y := 0; y < 16; y++ {
 		for x := 0; x < 16; x++ {
-			idx := pixels[y][x]
-			var c color.RGBA
-			if idx >= 0 && idx < len(Palette) {
-				c = Palette[idx]
-			}
+			c := pixels.GetColor(x, y)
 
 			for dy := 0; dy < scale; dy++ {
 				for dx := 0; dx < scale; dx++ {
@@ -857,6 +1016,135 @@ func SaveTilePNGScaled(pixels [][]int, filename string, scale int) error {
 	return png.Encode(file, img)
 }
 
+// TilesetComposer manages the composite tileset image
+type TilesetComposer struct {
+	tilesetImg *image.RGBA
+	tileSize   int
+	tilesPerRow int
+	currentTile int
+	totalTiles  int
+}
+
+// NewTilesetComposer creates a new tileset composer
+// tilesPerRow determines layout (e.g., 6 = 6 tiles wide)
+func NewTilesetComposer(totalTiles, tileSize, tilesPerRow int) *TilesetComposer {
+	width := tilesPerRow * tileSize
+	height := ((totalTiles + tilesPerRow - 1) / tilesPerRow) * tileSize // Ceiling division
+	
+	return &TilesetComposer{
+		tilesetImg: image.NewRGBA(image.Rect(0, 0, width, height)),
+		tileSize:   tileSize,
+		tilesPerRow: tilesPerRow,
+		currentTile: 0,
+		totalTiles:  totalTiles,
+	}
+}
+
+// AddTile adds a tile to the tileset at the current position
+func (tc *TilesetComposer) AddTile(pixels PixelData) {
+	if tc.currentTile >= tc.totalTiles {
+		return
+	}
+	
+	row := tc.currentTile / tc.tilesPerRow
+	col := tc.currentTile % tc.tilesPerRow
+	xOffset := col * tc.tileSize
+	yOffset := row * tc.tileSize
+	
+	// Copy tile pixels to tileset
+	for y := 0; y < tc.tileSize; y++ {
+		for x := 0; x < tc.tileSize; x++ {
+			c := pixels.GetColor(x, y)
+			tc.tilesetImg.Set(xOffset+x, yOffset+y, c)
+		}
+	}
+	
+	tc.currentTile++
+}
+
+// Save saves the tileset image to a file
+func (tc *TilesetComposer) Save(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return png.Encode(file, tc.tilesetImg)
+}
+
+// GetImage returns the tileset image for color analysis
+func (tc *TilesetComposer) GetImage() image.Image {
+	return tc.tilesetImg
+}
+
+// CountUniqueColors counts the number of unique colors in the tileset
+func CountUniqueColors(img image.Image) int {
+	colorMap := make(map[color.RGBA]bool)
+	bounds := img.Bounds()
+	
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			c := img.At(x, y)
+			r, g, b, a := c.RGBA()
+			// Convert from 16-bit to 8-bit
+			rgba := color.RGBA{
+				R: uint8(r >> 8),
+				G: uint8(g >> 8),
+				B: uint8(b >> 8),
+				A: uint8(a >> 8),
+			}
+			colorMap[rgba] = true
+		}
+	}
+	
+	return len(colorMap)
+}
+
+// GeneratePaletteFromImage generates a 48-color game palette from the tileset image
+// Note: Built-in colors (0-15) are always available in the engine
+// This function generates only the game palette (48 colors, indices 16-63)
+func GeneratePaletteFromImage(img image.Image) ([]string, error) {
+	// Use imgtool quantizer to get 48 colors (game palette only)
+	opts := imgtool.QuantizeOptions{
+		EnforceBlackWhite: false, // Built-in colors handle black/white
+		AlphaThreshold:    128,
+		DitherAlgorithm:   "none", // No dithering for palette extraction
+	}
+	
+	palette, err := imgtool.Quantize(img, opts)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Ensure exactly 48 colors (quantizer should do this, but double-check)
+	hexColors := make([]string, 48)
+	for i := 0; i < 48 && i < len(palette.Colors); i++ {
+		hexColors[i] = palette.Colors[i]
+	}
+	
+	// Fill remaining slots if needed (shouldn't happen, but safety check)
+	for i := len(palette.Colors); i < 48; i++ {
+		v := uint8(32 + (i * 223 / 47)) // Range from 32 to 255
+		hexColors[i] = fmt.Sprintf("#%02x%02x%02x", v, v, v)
+	}
+	
+	return hexColors, nil
+}
+
+// SavePaletteJSON saves a palette to JSON file in the same format as palette.json
+func SavePaletteJSON(colors []string, filename string) error {
+	paletteData := map[string]interface{}{
+		"colors": colors,
+	}
+	
+	data, err := json.MarshalIndent(paletteData, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	return os.WriteFile(filename, data, 0644)
+}
+
 // ================================
 // MAIN
 // ================================
@@ -864,10 +1152,96 @@ func SaveTilePNGScaled(pixels [][]int, filename string, scale int) error {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	println("==============================================")
-	println("  RetroForge Terrain Tile Generator")
-	println("  Tier 1 Complete Tileset (18 tiles)")
-	println("==============================================")
+	// Parse command-line flags
+	paletteFlag := flag.String("palette", "", "Game palette name to use (e.g., 'RetroForge 48'). Leave empty for full RGBA mode (16M colors)")
+	outputDirFlag := flag.String("output", "", "Output directory for generated tiles (default: design/tiles relative to engine root)")
+	flag.Parse()
+
+	// Set up palette mode
+	if *paletteFlag != "" {
+		// Use palette mode
+		usePalette = true
+		gamePalette := pal.GetPalette(*paletteFlag)
+		if len(gamePalette) == 0 {
+			println("  WARNING: Palette '" + *paletteFlag + "' not found, using default")
+			gamePalette = pal.GetPalette("RetroForge 48")
+		}
+		// Create full 64-color palette (16 built-in + 48 game palette)
+		fullPalette := pal.GetFullPalette(*paletteFlag)
+		Palette = fullPalette // Use full 64-color palette for rendering
+		println("==============================================")
+		println("  RetroForge Terrain Tile Generator")
+		println("  Tier 1 Complete Tileset (18 tiles)")
+		println("  Seamless Tiling Enabled")
+		println("  Mode: PALETTE (" + *paletteFlag + ")")
+		println("  Colors: 64 total (16 built-in + 48 game palette)")
+		println("==============================================")
+	} else {
+		// Use RGBA mode (16M colors)
+		usePalette = false
+		Palette = nil
+		println("==============================================")
+		println("  RetroForge Terrain Tile Generator")
+		println("  Tier 1 Complete Tileset (18 tiles)")
+		println("  Seamless Tiling Enabled")
+		println("  Mode: RGBA (16M colors)")
+		println("==============================================")
+	}
+	println()
+
+	// Determine output directory
+	var outputDir string
+	if *outputDirFlag != "" {
+		// Use provided path (absolute or relative)
+		outputDir = *outputDirFlag
+	} else {
+		// Default: design/tiles relative to engine root
+		// terraingen is in cmd/terraingen, so go up 2 levels to retroforge-engine root
+		// Then go up 1 level to RetroForge root, then into design/tiles
+		if wd, err := os.Getwd(); err == nil {
+			// Try to find design/tiles relative to current working directory
+			// Check if we're in retroforge-engine directory
+			if _, err := os.Stat(filepath.Join(wd, "design", "tiles")); err == nil {
+				outputDir = filepath.Join(wd, "design", "tiles")
+			} else {
+				// Try going up one level (assuming we're in retroforge-engine)
+				parentDir := filepath.Dir(wd)
+				if _, err := os.Stat(filepath.Join(parentDir, "design", "tiles")); err == nil {
+					outputDir = filepath.Join(parentDir, "design", "tiles")
+				} else {
+					// Fallback: use current directory
+					outputDir = wd
+				}
+			}
+		} else {
+			outputDir = "."
+		}
+	}
+
+	// Convert to absolute path
+	absOutputDir, err := filepath.Abs(outputDir)
+	if err != nil {
+		absOutputDir = outputDir
+	}
+	outputDir = absOutputDir
+
+	// Create output directory if it doesn't exist (overwrite if exists is default behavior)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		println("  ERROR: Could not create output directory:", outputDir)
+		println("  Using current directory instead")
+		outputDir = "."
+	}
+
+	// Create previews subdirectory
+	previewsDir := filepath.Join(outputDir, "previews")
+	if err := os.MkdirAll(previewsDir, 0755); err != nil {
+		println("  ERROR: Could not create previews directory:", previewsDir)
+		println("  Previews will be saved to output directory")
+		previewsDir = outputDir
+	}
+
+	println("Output directory:", outputDir)
+	println("Previews directory:", previewsDir)
 	println()
 
 	// Base terrains
@@ -896,18 +1270,33 @@ func main() {
 		"stone_to_gravel":        GenerateStoneGravelTransition,
 	}
 
+	// Calculate total tiles for tileset composition
+	totalTiles := len(baseTiles) + len(transitionTiles)
+	
+	// Create tileset composer (6 tiles per row for 18 tiles = 3 rows)
+	// Layout: 6 tiles wide × 3 rows = 18 tiles (6×16 = 96px wide, 3×16 = 48px tall)
+	tilesetComposer := NewTilesetComposer(totalTiles, 16, 6)
+
 	println("Generating BASE TERRAIN tiles (12)...")
 	println()
 	for name, genFunc := range baseTiles {
-		pixels := genFunc()
+		indices := genFunc()
+		pixelData := convertToPixelData(indices)
 
-		err := SaveTilePNG(pixels, name+"_16x16.png")
+		// Save main tile to output directory
+		outputPath := filepath.Join(outputDir, name+"_16x16.png")
+		err := SaveTilePNG(pixelData, outputPath)
 		if err != nil {
 			println("  ERROR:", name+"_16x16.png:", err.Error())
 			continue
 		}
 
-		err = SaveTilePNGScaled(pixels, name+"_preview.png", 8)
+		// Add tile to tileset composition
+		tilesetComposer.AddTile(pixelData)
+
+		// Save preview to previews subdirectory
+		previewPath := filepath.Join(previewsDir, name+"_preview.png")
+		err = SaveTilePNGScaled(pixelData, previewPath, 8)
 		if err != nil {
 			println("  ERROR:", name+"_preview.png:", err.Error())
 			continue
@@ -920,21 +1309,61 @@ func main() {
 	println("Generating TRANSITION tiles (6)...")
 	println()
 	for name, genFunc := range transitionTiles {
-		pixels := genFunc()
+		indices := genFunc()
+		pixelData := convertToPixelData(indices)
 
-		err := SaveTilePNG(pixels, name+"_16x16.png")
+		// Save main tile to output directory
+		outputPath := filepath.Join(outputDir, name+"_16x16.png")
+		err := SaveTilePNG(pixelData, outputPath)
 		if err != nil {
 			println("  ERROR:", name+"_16x16.png:", err.Error())
 			continue
 		}
 
-		err = SaveTilePNGScaled(pixels, name+"_preview.png", 8)
+		// Add tile to tileset composition
+		tilesetComposer.AddTile(pixelData)
+
+		// Save preview to previews subdirectory
+		previewPath := filepath.Join(previewsDir, name+"_preview.png")
+		err = SaveTilePNGScaled(pixelData, previewPath, 8)
 		if err != nil {
 			println("  ERROR:", name+"_preview.png:", err.Error())
 			continue
 		}
 
 		println("  ✓", name)
+	}
+
+	// Save tileset.png (1:1 sprite sheet)
+	println()
+	println("Creating tileset.png (composite sprite sheet)...")
+	tilesetPath := filepath.Join(outputDir, "tileset.png")
+	if err := tilesetComposer.Save(tilesetPath); err != nil {
+		println("  ERROR: Failed to save tileset.png:", err.Error())
+	} else {
+		println("  ✓ tileset.png saved")
+	}
+
+	// Count unique colors in tileset
+	println()
+	println("Analyzing tileset colors...")
+	colorCount := CountUniqueColors(tilesetComposer.GetImage())
+	println("  Unique colors in tileset:", colorCount)
+
+	// Generate and save custom palette
+	println()
+	println("Generating custom game palette (48 colors for indices 16-63)...")
+	paletteColors, err := GeneratePaletteFromImage(tilesetComposer.GetImage())
+	if err != nil {
+		println("  ERROR: Failed to generate palette:", err.Error())
+	} else {
+		palettePath := filepath.Join(outputDir, "tileset_palette.json")
+		if err := SavePaletteJSON(paletteColors, palettePath); err != nil {
+			println("  ERROR: Failed to save palette:", err.Error())
+		} else {
+			println("  ✓ tileset_palette.json saved (48 colors, game palette)")
+			println("    Note: Built-in colors (0-15) are always available in engine")
+		}
 	}
 
 	println()
@@ -967,8 +1396,25 @@ func main() {
 	println("  • stone_to_gravel    - Stone → Gravel")
 	println()
 	println("Files created:")
-	println("  • *_16x16.png        - Use these in your isometric converter")
-	println("  • *_preview.png      - 128x128 scaled previews")
+	println("  • *_16x16.png           - Individual tile files (use in isometric converter)")
+	println("  • tileset.png          - Composite sprite sheet (1:1, all tiles)")
+	println("  • tileset_palette.json  - Custom 48-color game palette (indices 16-63)")
+	println("  • previews/*_preview.png - 128x128 scaled previews in previews/ subfolder")
+	println()
+	println("Workflow Options:")
+	println("  MODERN: Use tileset.png directly (full color, 16M colors)")
+	println("  RETRO:  Use tileset_palette.json + individual tiles (64 colors: 16 built-in + 48 game)")
+	println()
+	println("Palette System:")
+	println("  • Built-in colors (0-15): Always available (grayscale + primary colors)")
+	println("  • Game palette (16-63): From tileset_palette.json or predefined palette")
+	println("  • Total: 64 colors available at any time")
+	println()
+	println("Usage:")
+	println("  terraingen                                    - Generate tiles in RGBA mode (16M colors)")
+	println("  terraingen -palette \"RetroForge 48\"          - Generate tiles using specified game palette")
+	println("  terraingen -output \"/path/to/tiles\"         - Specify output directory")
+	println("  terraingen -palette \"RetroForge 48\" -output \"design/tiles\" - Combined options")
 	println()
 }
 

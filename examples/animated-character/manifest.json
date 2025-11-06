@@ -11,7 +11,7 @@
     "genre": "Demo",
     "tags": ["example", "demo", "animation", "sprites", "multi-frame"],
     "entry": "main.lua",
-    "palette": "Pastel 50",
+    "palette": "Pastel 48",
     "scale": 1
   },
   "manifestKeys": [

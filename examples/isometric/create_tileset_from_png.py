@@ -4,7 +4,7 @@ Generate isometric tileset from PNG files using tile2iso converter.
 
 This script:
 1. Loads PNG files from design/tiles directory
-2. Converts RGB colors to RetroForge 50 palette indices
+2. Converts RGB colors to RetroForge 48 palette indices (using palette.json, game palette)
 3. Creates three sprites (top, left, right) for each terrain type
 4. Uses the tile2iso CLI tool to convert them into 2.5D isometric tiles
 5. Outputs a tileset with isISO=true flag
@@ -29,61 +29,55 @@ def get_tiles_dir():
     tiles_dir = os.path.join(retroforge_root, 'design', 'tiles')
     return tiles_dir
 
-TILES_DIR = get_tiles_dir()
+# Path to palette.json (same as terraingen uses)
+def get_palette_path():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    engine_root = os.path.abspath(os.path.join(script_dir, '../..'))  # retroforge-engine
+    palette_path = os.path.join(engine_root, 'palette.json')
+    return palette_path
 
-# RetroForge 50 palette (matching the Go terraingen tool)
-RETROFORGE_PALETTE = [
-    (0, 0, 0),           # 0: Black
-    (29, 43, 83),        # 1: Dark blue
-    (126, 37, 83),       # 2: Dark purple
-    (0, 135, 81),        # 3: Dark green
-    (171, 82, 54),       # 4: Brown
-    (95, 87, 79),        # 5: Dark gray
-    (194, 195, 199),     # 6: Light gray
-    (255, 241, 232),     # 7: White
-    (255, 0, 77),        # 8: Red
-    (255, 163, 0),       # 9: Orange
-    (255, 236, 39),      # 10: Yellow
-    (0, 228, 54),        # 11: Green
-    (41, 173, 255),      # 12: Blue
-    (131, 118, 156),     # 13: Lavender
-    (255, 119, 168),     # 14: Pink
-    (255, 204, 170),     # 15: Peach
-    (34, 32, 52),        # 16: Very dark blue
-    (69, 40, 60),        # 17: Dark purple-brown
-    (102, 57, 49),       # 18: Dark brown
-    (143, 86, 59),       # 19: Medium brown
-    (223, 113, 38),      # 20: Light brown/orange
-    (217, 160, 102),     # 21: Tan
-    (238, 195, 154),     # 22: Light tan
-    (251, 242, 54),      # 23: Bright yellow
-    (153, 229, 80),      # 24: Light green
-    (106, 190, 48),      # 25: Medium green
-    (55, 148, 110),      # 26: Teal green
-    (75, 105, 47),       # 27: Dark olive
-    (82, 75, 36),        # 28: Olive brown
-    (50, 60, 57),        # 29: Dark teal
-    (63, 63, 116),       # 30: Dark blue
-    (48, 96, 130),       # 31: Ocean blue
-    (91, 110, 225),      # 32: Bright blue
-    (99, 155, 255),      # 33: Sky blue
-    (95, 205, 228),      # 34: Light blue
-    (203, 219, 252),     # 35: Very light blue
-    (155, 173, 183),     # 36: Blue-gray
-    (132, 126, 135),     # 37: Medium gray
-    (105, 106, 106),     # 38: Dark gray
-    (89, 86, 82),        # 39: Very dark gray
-    (118, 66, 138),      # 40: Purple
-    (172, 50, 50),       # 41: Dark red
-    (217, 87, 99),       # 42: Pink-red
-    (215, 123, 186),     # 43: Pink
-    (143, 151, 74),      # 44: Yellow-green
-    (138, 111, 48),      # 45: Gold-brown
-    (194, 195, 199),     # 46: Light gray
-    (255, 255, 255),     # 47: Pure white
-    (0, 0, 0),           # 48: Black
-    (0, 0, 0),           # 49: Black
-]
+TILES_DIR = get_tiles_dir()
+PALETTE_PATH = get_palette_path()
+
+# Load RetroForge 48 palette from palette.json (matches engine's pal.GetPalette("RetroForge 48"))
+def load_palette_from_json():
+    """Load the RetroForge 48 game palette from palette.json to match the engine.
+    This is the 48-color game palette (indices 16-63 in full 64-color system)."""
+    try:
+        with open(PALETTE_PATH, 'r') as f:
+            palette_data = json.load(f)
+        
+        def hex_to_rgb(hex_str):
+            hex_str = hex_str.lstrip('#')
+            return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
+        
+        # Convert hex colors to RGB tuples (game palette is 48 colors)
+        palette = []
+        for hex_color in palette_data['colors'][:48]:  # Take first 48 colors (game palette)
+            palette.append(hex_to_rgb(hex_color))
+        
+        if len(palette) < 48:
+            raise ValueError(f"palette.json has only {len(palette)} colors, expected 48")
+        
+        return palette
+    except Exception as e:
+        print(f"Warning: Could not load palette.json ({e}), using fallback palette")
+        # Fallback to palette.json values as hardcoded (should match if palette.json is correct)
+        return [
+            (0, 0, 0), (255, 255, 255), (255, 137, 137), (255, 77, 77), (195, 17, 17),
+            (255, 205, 137), (255, 145, 77), (195, 85, 17), (255, 255, 137), (255, 216, 77),
+            (195, 156, 17), (242, 255, 137), (182, 255, 77), (122, 195, 17), (137, 255, 195),
+            (77, 212, 135), (17, 152, 75), (114, 255, 255), (54, 216, 199), (0, 156, 139),
+            (137, 255, 255), (77, 213, 255), (17, 153, 195), (162, 251, 255), (102, 191, 255),
+            (42, 131, 195), (171, 196, 255), (111, 136, 255), (51, 76, 195), (198, 177, 255),
+            (138, 117, 255), (78, 57, 195), (240, 180, 255), (180, 120, 255), (108, 24, 195),
+            (255, 191, 217), (255, 111, 177), (195, 51, 81), (255, 191, 216), (255, 127, 160),
+            (195, 67, 64), (228, 181, 150), (168, 121, 90), (108, 61, 30), (220, 237, 150),
+            (160, 177, 90), (100, 117, 30), (116, 249, 255), (56, 189, 248), (0, 129, 188),
+        ]
+
+# RetroForge 48 palette - loaded from palette.json to match engine (game palette, indices 16-63)
+RETROFORGE_PALETTE = load_palette_from_json()
 
 def color_distance(r1, g1, b1, r2, g2, b2):
     """Calculate Euclidean distance between two RGB colors."""
@@ -93,7 +87,14 @@ def color_distance(r1, g1, b1, r2, g2, b2):
     return math.sqrt(dr*dr + dg*dg + db*db)
 
 def find_closest_palette_index(r, g, b):
-    """Find the closest palette color index for an RGB color."""
+    """Find the closest palette color index for an RGB color.
+    First checks for exact matches, then falls back to closest match."""
+    # First check for exact match (handles PNGs saved with exact palette colors)
+    for idx, (pr, pg, pb) in enumerate(RETROFORGE_PALETTE):
+        if (r, g, b) == (pr, pg, pb):
+            return idx
+    
+    # Fall back to closest match if no exact match found
     min_dist = float('inf')
     best_idx = 0
     
@@ -204,7 +205,7 @@ def build_tile2iso():
     return tile2iso_path
 
 def create_palette_json(palette_path):
-    """Create a palette.json file with RetroForge 50 colors."""
+    """Create a palette.json file with RetroForge 48 game palette colors."""
     colors = []
     for r, g, b in RETROFORGE_PALETTE:
         hex_color = f"#{r:02x}{g:02x}{b:02x}"
@@ -362,7 +363,7 @@ def main():
         print()
         print(f"✓ Created isometric tileset: {output_path}")
         print(f"  Tiles: {', '.join(sorted(tileset.keys()))}")
-        print(f"  Palette: RetroForge 50")
+        print(f"  Palette: RetroForge 48 (game palette, indices 16-63 in full system)")
         print(f"  Isometric: True (tileset-level flag)")
         print(f"  All tiles are 2.5D isometric tiles with side faces")
         print()

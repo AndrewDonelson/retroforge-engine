@@ -16,10 +16,13 @@ func colorDistance(r1, g1, b1, r2, g2, b2 uint8) float64 {
 }
 
 // Find closest palette color index
-// RetroForge 50 palette structure:
-// 0 = black, 1 = white, 2-49 = 16 hues × 3 shades
+// NOTE: This tool uses the OLD RetroForge 50 palette structure (0-49).
+// The new system uses 64 colors: 0-15 built-in, 16-63 game palette (48 colors).
+// This tool should be updated to use the new 64-color system.
+// Old structure: 0 = black, 1 = white, 2-49 = 16 hues × 3 shades
+// New structure: 0-15 = built-in colors (black=0, white=7, etc.), 16-63 = game palette
 func findClosestPaletteIndex(r, g, b uint8) int {
-	// Define RetroForge 50 palette colors (matching palettes.go)
+	// Define RetroForge 50 palette colors (OLD SYSTEM - matches old palettes.go)
 	paletteColors := []struct {
 		r, g, b uint8
 		index   int
@@ -172,6 +175,7 @@ func main() {
 		origWidth, origHeight, cropX, cropY, iconWidth, iconHeight)
 	fmt.Printf("// logoPixels contains the hardcoded RetroForge logo sprite data (%dx%d)\n", outputWidth, outputHeight)
 	fmt.Printf("// Colors mapped to RetroForge 50 palette indices (closest match)\n")
+	fmt.Printf("// NOTE: This uses the OLD 50-color system. New system uses 64 colors (16 built-in + 48 game)\n")
 	fmt.Printf("var logoPixels = [][]int{\n")
 
 	// Create sprite data at native resolution

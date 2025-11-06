@@ -7,7 +7,7 @@ Same tiles as isometric but without isISO flag.
 import json
 import os
 
-# Palette colors (using Pastel 50 palette indices)
+# Palette colors (using Pastel 48 palette indices, game palette)
 PALETTE_INDICES = {
     'earth': 12,      # Brown
     'grass': 17,      # Green
@@ -36,13 +36,13 @@ def create_pattern_tile(tile_name, base_color_idx, pattern_color_idx=None):
         for x in range(16):
             # Simple checkerboard pattern for grass
             if tile_name == 'grass' and (x + y) % 4 < 2:
-                row.append(base_color_idx + 1 if base_color_idx < 49 else base_color_idx)
+                row.append(base_color_idx + 1 if base_color_idx < 47 else base_color_idx)  # Max 47 for game palette
             # Sand pattern for desert
             elif tile_name == 'desert' and (x * 3 + y * 2) % 7 < 3:
                 row.append(base_color_idx - 1 if base_color_idx > 0 else base_color_idx)
             # Water pattern (waves)
             elif tile_name == 'water' and (x + y * 2) % 6 < 2:
-                row.append(base_color_idx + 2 if base_color_idx < 48 else base_color_idx)
+                row.append(base_color_idx + 2 if base_color_idx < 46 else base_color_idx)  # Max 47 for game palette
             # Rock pattern (random speckles)
             elif tile_name == 'rock' and (x * 5 + y * 7) % 11 < 3:
                 row.append(base_color_idx - 2 if base_color_idx > 1 else base_color_idx)

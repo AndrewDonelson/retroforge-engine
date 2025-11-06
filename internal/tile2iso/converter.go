@@ -7,12 +7,13 @@ import (
 	"image/draw"
 
 	"github.com/AndrewDonelson/retroforge-engine/internal/cartio"
+	"github.com/AndrewDonelson/retroforge-engine/internal/pal"
 )
 
 // CreateIsometricTile creates an isometric tile from three sprites
 // topSpriteName, leftSpriteName, rightSpriteName: names of sprites in the sprite map
 // topFrameName, leftFrameName, rightFrameName: frame names (empty for static sprites or to use first frame)
-// paletteColors: 50-color palette (hex strings)
+// paletteColors: 48-color game palette (hex strings, indices 16-63)
 // spriteMap: map of all available sprites
 // options: tile generation options
 func (ic *IsometricConverter) CreateIsometricTile(
@@ -24,9 +25,32 @@ func (ic *IsometricConverter) CreateIsometricTile(
 ) (*cartio.SpriteData, error) {
 	fmt.Println("=== ISOMETRIC TILE GENERATION DEBUG ===")
 	
-	// Validate inputs
-	if len(paletteColors) < 50 {
-		return nil, fmt.Errorf("palette must have at least 50 colors, got %d", len(paletteColors))
+	// Validate inputs - game palette should have 48 colors
+	if len(paletteColors) < 48 {
+		return nil, fmt.Errorf("game palette must have at least 48 colors, got %d", len(paletteColors))
+	}
+	
+	// Get built-in colors (0-15) and create full 64-color palette
+	builtinColors := pal.BuiltinColors
+	fullPalette := make([]color.RGBA, 64)
+	copy(fullPalette[0:16], builtinColors)
+	
+	// Parse game palette colors (48 colors, indices 16-63)
+	gamePalette := make([]color.RGBA, 48)
+	for i := 0; i < 48 && i < len(paletteColors); i++ {
+		hex := paletteColors[i]
+		var r, g, b uint32
+		if _, err := fmt.Sscanf(hex[1:3], "%02x", &r); err != nil {
+			return nil, fmt.Errorf("invalid hex color at index %d: %s", i, hex)
+		}
+		if _, err := fmt.Sscanf(hex[3:5], "%02x", &g); err != nil {
+			return nil, fmt.Errorf("invalid hex color at index %d: %s", i, hex)
+		}
+		if _, err := fmt.Sscanf(hex[5:7], "%02x", &b); err != nil {
+			return nil, fmt.Errorf("invalid hex color at index %d: %s", i, hex)
+		}
+		gamePalette[i] = color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+		fullPalette[16+i] = gamePalette[i]
 	}
 
 	// Validate dimensions BEFORE setting defaults
@@ -91,18 +115,18 @@ func (ic *IsometricConverter) CreateIsometricTile(
 		return nil, fmt.Errorf("right sprite pixels: %w", err)
 	}
 
-	// Convert pixel data to images
-	topImg, err := PixelDataToImage(topPixels, paletteColors)
+	// Convert pixel data to images (using full 64-color palette)
+	topImg, err := PixelDataToImage(topPixels, paletteColors, builtinColors)
 	if err != nil {
 		return nil, fmt.Errorf("convert top to image: %w", err)
 	}
 
-	leftImg, err := PixelDataToImage(leftPixels, paletteColors)
+	leftImg, err := PixelDataToImage(leftPixels, paletteColors, builtinColors)
 	if err != nil {
 		return nil, fmt.Errorf("convert left to image: %w", err)
 	}
 
-	rightImg, err := PixelDataToImage(rightPixels, paletteColors)
+	rightImg, err := PixelDataToImage(rightPixels, paletteColors, builtinColors)
 	if err != nil {
 		return nil, fmt.Errorf("convert right to image: %w", err)
 	}
@@ -176,7 +200,7 @@ func (ic *IsometricConverter) CreateIsometricTile(
 	finalHeight := options.TileHeight + options.Height  // 16 + 8 = 24 for default
 
 	// Convert back to pixel data (no resize - use composite directly)
-	resultPixels, _, err := ImageToPixelData(composite, paletteColors)
+	resultPixels, err := ImageToPixelData(composite, fullPalette)
 	if err != nil {
 		return nil, fmt.Errorf("convert composite to pixels: %w", err)
 	}
@@ -451,6 +475,11 @@ func compositeIsometricTile(topImg, leftImg, rightImg image.Image, options TileO
 // Left: parallelogram outline (4 edges)
 // Right: parallelogram outline (4 edges)
 func drawOutline(img *image.RGBA, options TileOptions) {
+	// Don't draw outline if ShowOutline is false
+	if !options.ShowOutline {
+		return
+	}
+	
 	darkColor := color.RGBA{R: 0, G: 0, B: 0, A: 255} // Black outline
 	width := options.TileWidth
 	tileHeight := options.TileHeight

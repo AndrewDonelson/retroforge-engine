@@ -17,17 +17,18 @@ func TestNewIsometricConverter(t *testing.T) {
 
 func TestDefaultTileOptions(t *testing.T) {
 	opts := DefaultTileOptions()
-	if opts.Height != 16 {
-		t.Errorf("expected Height 16, got %d", opts.Height)
+	// Defaults are for 32×24 tiles (32 wide, 16 top + 8 sides)
+	if opts.Height != 8 {
+		t.Errorf("expected Height 8, got %d", opts.Height)
 	}
 	if opts.LightingMode != LightingGradient {
 		t.Errorf("expected LightingMode Gradient, got %s", opts.LightingMode)
 	}
-	if opts.TileWidth != 64 {
-		t.Errorf("expected TileWidth 64, got %d", opts.TileWidth)
+	if opts.TileWidth != 32 {
+		t.Errorf("expected TileWidth 32, got %d", opts.TileWidth)
 	}
-	if opts.TileHeight != 32 {
-		t.Errorf("expected TileHeight 32, got %d", opts.TileHeight)
+	if opts.TileHeight != 16 {
+		t.Errorf("expected TileHeight 16, got %d", opts.TileHeight)
 	}
 }
 

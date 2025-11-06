@@ -4,6 +4,8 @@ import (
 	"image"
 	"image/color"
 	"testing"
+
+	"github.com/AndrewDonelson/retroforge-engine/internal/pal"
 )
 
 func TestPixelDataToImage(t *testing.T) {
@@ -45,9 +47,10 @@ func TestPixelDataToImage(t *testing.T) {
 		},
 	}
 
+	builtinColors := pal.BuiltinColors
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			img, err := PixelDataToImage(tt.pixels, palette)
+			img, err := PixelDataToImage(tt.pixels, palette, builtinColors)
 			if (err != nil) != tt.wantError {
 				t.Errorf("PixelDataToImage() error = %v, wantError %v", err, tt.wantError)
 				return
@@ -60,7 +63,16 @@ func TestPixelDataToImage(t *testing.T) {
 }
 
 func TestImageToPixelData(t *testing.T) {
-	palette := generateTestPalette()
+	gamePalette := generateTestPalette()
+	builtinColors := pal.BuiltinColors
+	
+	// Create full 64-color palette
+	fullPalette := make([]color.RGBA, 64)
+	copy(fullPalette[0:16], builtinColors)
+	for i := 0; i < len(gamePalette) && i < 48; i++ {
+		r, g, b, a := parseHexColor(gamePalette[i])
+		fullPalette[16+i] = color.RGBA{R: r, G: g, B: b, A: a}
+	}
 
 	// Create a simple test image
 	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
@@ -69,7 +81,7 @@ func TestImageToPixelData(t *testing.T) {
 	img.Set(0, 1, color.RGBA{R: 0, G: 0, B: 255, A: 255})   // Blue
 	img.Set(1, 1, color.RGBA{R: 0, G: 0, B: 0, A: 0})       // Transparent
 
-	pixels, paletteOut, err := ImageToPixelData(img, palette)
+	pixels, err := ImageToPixelData(img, fullPalette)
 	if err != nil {
 		t.Fatalf("ImageToPixelData() error = %v", err)
 	}
@@ -84,11 +96,6 @@ func TestImageToPixelData(t *testing.T) {
 	// Check transparent pixel
 	if pixels[1][1] != -1 {
 		t.Errorf("expected transparent pixel (-1), got %d", pixels[1][1])
-	}
-
-	// Check palette output
-	if len(paletteOut) != len(palette) {
-		t.Errorf("expected palette length %d, got %d", len(palette), len(paletteOut))
 	}
 }
 
@@ -157,10 +164,10 @@ func TestColorDistance(t *testing.T) {
 	}
 }
 
-// generateTestPalette creates a simple test palette with 50 colors
+// generateTestPalette creates a simple test game palette with 48 colors (for indices 16-63)
 func generateTestPalette() []string {
-	palette := make([]string, 50)
-	for i := 0; i < 50; i++ {
+	palette := make([]string, 48)
+	for i := 0; i < 48; i++ {
 		// Generate simple colors
 		r := uint8(i * 5 % 256)
 		g := uint8((i * 7) % 256)

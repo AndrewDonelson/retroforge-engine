@@ -7,8 +7,10 @@ import (
 )
 
 // PixelDataToImage converts palette-indexed pixel data to an image.Image
-// paletteColors should be a slice of 50 hex color strings
-func PixelDataToImage(pixels [][]int, paletteColors []string) (image.Image, error) {
+// paletteColors should be a slice of 48 hex color strings (game palette)
+// Built-in colors (0-15) are handled separately
+// For full 64-color support, use GetFullPalette from pal package
+func PixelDataToImage(pixels [][]int, paletteColors []string, builtinColors []color.RGBA) (image.Image, error) {
 	if len(pixels) == 0 {
 		return nil, ErrInvalidDimensions
 	}
@@ -17,14 +19,14 @@ func PixelDataToImage(pixels [][]int, paletteColors []string) (image.Image, erro
 	width := len(pixels[0])
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	// Parse palette colors
-	palette := make([]color.RGBA, 50)
+	// Parse game palette colors (48 colors)
+	gamePalette := make([]color.RGBA, 48)
 	for i, hex := range paletteColors {
-		if i >= 50 {
+		if i >= 48 {
 			break
 		}
 		r, g, b, a := parseHexColor(hex)
-		palette[i] = color.RGBA{R: r, G: g, B: b, A: a}
+		gamePalette[i] = color.RGBA{R: r, G: g, B: b, A: a}
 	}
 
 	// Convert pixels to image
@@ -34,8 +36,21 @@ func PixelDataToImage(pixels [][]int, paletteColors []string) (image.Image, erro
 			if idx == -1 {
 				// Transparent
 				c = color.RGBA{A: 0}
-			} else if idx >= 0 && idx < 50 {
-				c = palette[idx]
+			} else if idx >= 0 && idx < 16 {
+				// Built-in color (0-15)
+				if idx < len(builtinColors) {
+					c = builtinColors[idx]
+				} else {
+					c = color.RGBA{A: 255} // Black fallback
+				}
+			} else if idx >= 16 && idx < 64 {
+				// Game palette color (16-63)
+				gameIdx := idx - 16
+				if gameIdx < len(gamePalette) {
+					c = gamePalette[gameIdx]
+				} else {
+					c = color.RGBA{A: 255} // Black fallback
+				}
 			} else {
 				// Invalid index, use black
 				c = color.RGBA{A: 255}
@@ -49,19 +64,14 @@ func PixelDataToImage(pixels [][]int, paletteColors []string) (image.Image, erro
 
 // ImageToPixelData converts an image.Image back to palette-indexed pixel data
 // Returns the pixel data and the palette colors used
-func ImageToPixelData(img image.Image, paletteColors []string) ([][]int, []string, error) {
+// fullPalette should be the complete 64-color palette (16 built-in + 48 game)
+func ImageToPixelData(img image.Image, fullPalette []color.RGBA) ([][]int, error) {
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	// Parse palette colors
-	palette := make([]color.RGBA, 50)
-	for i, hex := range paletteColors {
-		if i >= 50 {
-			break
-		}
-		r, g, b, a := parseHexColor(hex)
-		palette[i] = color.RGBA{R: r, G: g, B: b, A: a}
+	if len(fullPalette) < 64 {
+		return nil, fmt.Errorf("full palette must have 64 colors (got %d)", len(fullPalette))
 	}
 
 	// Convert image to pixels
@@ -88,11 +98,11 @@ func ImageToPixelData(img image.Image, paletteColors []string) ([][]int, []strin
 				continue
 			}
 
-			// Find closest palette color
+			// Find closest palette color in full 64-color palette
 			bestIdx := 0
-			bestDist := colorDistance(rgba, palette[0])
-			for i := 1; i < 50; i++ {
-				dist := colorDistance(rgba, palette[i])
+			bestDist := colorDistance(rgba, fullPalette[0])
+			for i := 1; i < 64; i++ {
+				dist := colorDistance(rgba, fullPalette[i])
 				if dist < bestDist {
 					bestDist = dist
 					bestIdx = i
@@ -102,7 +112,7 @@ func ImageToPixelData(img image.Image, paletteColors []string) ([][]int, []strin
 		}
 	}
 
-	return pixels, paletteColors, nil
+	return pixels, nil
 }
 
 // parseHexColor parses a hex color string (#RRGGBB) to RGBA

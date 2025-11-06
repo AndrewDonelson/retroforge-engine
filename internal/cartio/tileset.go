@@ -25,12 +25,14 @@ type TilesetMap map[string]TileData
 // TilesetData represents a complete tileset with metadata
 type TilesetData struct {
 	IsISO    bool       `json:"isISO"`    // If true, tileset is isometric (renders using isometric transformation)
+	Seed     int        `json:"seed,omitempty"` // Seed for deterministic tile variation (rotation/flipping) - only for normal tiles
 	Tiles    TilesetMap `json:"tiles"`     // Map of tile names to tile data (or root-level tiles if isISO not present)
 }
 
 // tilesetJSON is used for JSON unmarshaling (handles both old format and new format)
 type tilesetJSON struct {
 	IsISO bool       `json:"isISO"`
+	Seed  int        `json:"seed,omitempty"`
 	Tiles TilesetMap `json:"tiles"`
 	// Support old format where tiles are at root level
 	TilesetMap
@@ -50,6 +52,13 @@ func (ts *TilesetData) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		ts.IsISO = isISO
+
+		// Check if "seed" field exists
+		if seedData, hasSeed := raw["seed"]; hasSeed {
+			if err := json.Unmarshal(seedData, &ts.Seed); err != nil {
+				return err
+			}
+		}
 
 		// Check if "tiles" field exists
 		if tilesData, hasTiles := raw["tiles"]; hasTiles {
@@ -71,6 +80,12 @@ func (ts *TilesetData) UnmarshalJSON(data []byte) error {
 	} else {
 		// Old format: tiles at root level, no isISO flag
 		ts.IsISO = false
+		// Check for seed in old format too
+		if seedData, hasSeed := raw["seed"]; hasSeed {
+			if err := json.Unmarshal(seedData, &ts.Seed); err != nil {
+				// Seed parsing error is non-fatal
+			}
+		}
 		if err := json.Unmarshal(data, &ts.Tiles); err != nil {
 			return err
 		}
@@ -81,10 +96,14 @@ func (ts *TilesetData) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON writes the tileset in the new format
 func (ts TilesetData) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	result := map[string]interface{}{
 		"isISO": ts.IsISO,
 		"tiles": ts.Tiles,
-	})
+	}
+	if ts.Seed != 0 {
+		result["seed"] = ts.Seed
+	}
+	return json.Marshal(result)
 }
 
 // NormalizeTileData ensures tile data is in a consistent state
